@@ -5,12 +5,12 @@ import pytest
 
 class TestImport:
     def test_import(self):
-        import dml  # noqa: F401
+        import dmlcloud  # noqa: F401
 
     def test_version(self):
-        import dml
+        import dmlcloud
 
-        version = dml.__version__
+        version = dmlcloud.__version__
         assert isinstance(version, str)
         assert version > '0.0.0'
 

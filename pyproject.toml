@@ -3,7 +3,7 @@ requires = ["setuptools", "packaging", "wheel", "build", "pre-commit", "pytest"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dml"
+name = "dmlcloud"
 authors = [
     {name = "Sebastian Hoffmann"}
 ]
@@ -14,10 +14,10 @@ keywords = ["pytorch", "horovod", "slurm", "distributed", "training"]
 dynamic = ["version", "readme", "dependencies"]
 
 [project.urls]
-Repository = "https://github.com/sehoffmann/dml"
+Repository = "https://github.com/sehoffmann/dmlcloud"
 
 [tool.setuptools.dynamic]
-version = {attr = "dml.__version__"}
+version = {attr = "dmlcloud.__version__"}
 readme = {file = ["README.md"], content-type = "text/markdown"}
 dependencies = {file = ["requirements.txt"]}
 

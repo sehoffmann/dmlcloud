@@ -2,8 +2,8 @@ import sys
 
 import pytest
 import torch
-from dml.training import BaseTrainer, ClassificationTrainer
-from dml.training.config import DefaultConfig
+from dmlcloud.training import BaseTrainer, ClassificationTrainer
+from dmlcloud.training.config import DefaultConfig
 
 
 class DummyDataset(torch.utils.data.Dataset):
