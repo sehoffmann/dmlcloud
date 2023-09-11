@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "packaging", "wheel", "pre-commit", "pytest"]
+requires = ["setuptools", "packaging", "wheel", "build", "pre-commit", "pytest"]
 build-backend = "setuptools.build_meta"
 
 [project]

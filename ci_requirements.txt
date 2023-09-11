@@ -1,5 +1,6 @@
 setuptools
 packaging
 wheel
+build
 pre-commit
 pytest

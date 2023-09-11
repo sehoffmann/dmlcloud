@@ -23,17 +23,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-      uses: actions/checkout@v3
-      with:
-        ref: ${{ inputs.branch }}
-        submodules: recursive
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.branch }}
+          submodules: recursive
 
       - name: Setup Environment
         uses: ./.github/actions/setup_environment
 
       - name: Build Wheel
         run: |
-          python3 -m build
+          python -m build
 
       - name: Upload Wheels to Github
         uses: actions/upload-artifact@v3
@@ -48,6 +48,11 @@ jobs:
     outputs:
       upload: ${{ steps.trigger_upload.outputs.value }}
     steps:
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
       - name: Download Artifacts From Github
         continue-on-error: true
         uses: actions/download-artifact@v3
@@ -74,7 +79,7 @@ jobs:
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: |
-          pip3 install twine
+          pip install twine
           if [[ "${{ inputs.real-pypi }}" == true ]]; then
             python -m twine upload \
               --username __token__ \
