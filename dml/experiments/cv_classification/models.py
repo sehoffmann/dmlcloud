@@ -1,11 +1,11 @@
 from torch import nn
-from torchvision.models.resnet import ResNet, resnet18, resnet34, resnet50, resnet101, resnet152
+from torchvision.models.resnet import ResNet, resnet101, resnet152, resnet18, resnet34, resnet50
 
 
 def create_mlp(task, hidden_layers, layer_norm=False):
     hidden_layers = list(hidden_layers)
     hidden_layers.insert(0, task.input_channels * task.img_size * task.img_size)
-    
+
     layers = [nn.Flatten()]
     for i in range(1, len(hidden_layers)):
         layers += [nn.Linear(hidden_layers[i - 1], hidden_layers[i], bias=not layer_norm)]
@@ -37,17 +37,22 @@ def create_cnn(task, blocks, instance_norm=False, kernel_size=3):
 def create_resnet(task, block, layers, **kwargs):
     return ResNet(block, layers, num_classes=task.num_classes, **kwargs)
 
+
 def create_resnet18(task):
     return resnet18(num_classes=task.num_classes)
+
 
 def create_resnet34(task):
     return resnet34(num_classes=task.num_classes)
 
+
 def create_resnet50(task):
     return resnet50(num_classes=task.num_classes)
 
+
 def create_resnet101(task):
     return resnet101(num_classes=task.num_classes)
+
 
 def create_resnet152(task):
     return resnet152(num_classes=task.num_classes)
@@ -56,13 +61,13 @@ def create_resnet152(task):
 MODEL_CONFIGS = {
     'mlp_minimal': {
         'create_fn': create_mlp,
-        'hidden_layers': [128],    
+        'hidden_layers': [128],
         'layer_norm': False,
     },
     'mlp': {
         'create_fn': create_mlp,
         'hidden_layers': [128, 128, 128],
-        'layer_norm': True,   
+        'layer_norm': True,
     },
     'cnn_minimal': {
         'create_fn': create_cnn,
@@ -88,5 +93,5 @@ MODEL_CONFIGS = {
     },
     'resnet152': {
         'create_fn': create_resnet152,
-    },  
+    },
 }

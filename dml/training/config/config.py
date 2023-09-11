@@ -4,6 +4,7 @@ from .meta import MetaConfig
 from .training import TrainingConfig
 from .wandb import WandbConfig
 
+
 class BaseConfig:
     def __init__(self, dct=None):
         self._sub_configs = []

@@ -1,6 +1,6 @@
 from argparse import BooleanOptionalAction
 
-from .common import SubConfig, ConfigVar, ArgparseVar
+from .common import ArgparseVar, SubConfig
 
 
 class TrainingConfig(SubConfig):

@@ -35,6 +35,7 @@ class EnumAction(argparse.Action):
     Argparse action for handling Enums
     From https://stackoverflow.com/a/60750535/4546885
     """
+
     def __init__(self, **kwargs):
         # Pop off the type value
         enum_type = kwargs.pop("type", None)
@@ -48,7 +49,7 @@ class EnumAction(argparse.Action):
         # Generate choices from the Enum
         kwargs.setdefault("choices", tuple(e.value for e in enum_type))
 
-        super(EnumAction, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self._enum = enum_type
 

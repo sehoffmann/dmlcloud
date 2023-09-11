@@ -104,6 +104,7 @@ def log_git():
     msg += delimiter()
     logging.info(msg)
 
+
 def log_model(model):
     n_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     n_non_trainable_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
@@ -118,8 +119,8 @@ def global_grad_norm(parameters, norm_type=2.0):
     grads = [p.grad for p in parameters if p.grad is not None]
     norm_type = float(norm_type)
     if len(grads) == 0:
-        return torch.tensor(0.)
-    
+        return torch.tensor(0.0)
+
     first_device = grads[0].device
     grouped_grads = _group_tensors_by_device_and_dtype([[g.detach() for g in grads]])
 
@@ -128,7 +129,7 @@ def global_grad_norm(parameters, norm_type=2.0):
         total_norm = norms[0] if len(norms) == 1 else torch.max(torch.stack(norms))
     else:
         norms = []
-        for ((device, _), [grads]) in grouped_grads.items():
+        for (device, _), [grads] in grouped_grads.items():
             norms.extend([torch.norm(g, norm_type) for g in grads])
 
         total_norm = torch.norm(torch.stack([norm.to(first_device) for norm in norms]), norm_type)

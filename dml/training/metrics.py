@@ -7,6 +7,7 @@ Var = 'var'
 Std = 'std'
 Statistics = 'statistics'
 
+
 class Metric:
     def __init__(self, name, reduction=hvd.Average, allreduce=True):
         self.name = name
@@ -57,7 +58,9 @@ class Metric:
         tensor = self.reduce_locally()
         if self.allreduce:
             if self.reduction is Var:
-                return hvd.allreduce_(tensor, op=hvd.Average, name=f'metric/{self.name}')  # not properly bessel corrected, but close enough
+                return hvd.allreduce_(
+                    tensor, op=hvd.Average, name=f'metric/{self.name}'
+                )  # not properly bessel corrected, but close enough
             elif self.reduction is Std:
                 var = hvd.allreduce(tensor**2, op=hvd.Average, name=f'metric/{self.name}')
                 return torch.sqrt(var)
@@ -87,7 +90,7 @@ class MetricSaver:
         self.current_metrics = {}
 
     def log_metric(self, name, value, reduction=hvd.Average, allreduce=True):
-        if reduction == Statistics: 
+        if reduction == Statistics:
             self.log_metric(f'{name}/mean', value, reduction=hvd.Average, allreduce=allreduce)
             self.log_metric(f'{name}/std', value, reduction=Std, allreduce=allreduce)
             self.log_metric(f'{name}/min', value, reduction=hvd.Min, allreduce=allreduce)

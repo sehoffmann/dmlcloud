@@ -1,7 +1,8 @@
+from enum import Enum
+
 import torch
 from torchvision import transforms
 from torchvision.transforms.functional import InterpolationMode
-from enum import Enum
 
 TRANSFORM_PRESETS = [
     'none',
@@ -14,13 +15,26 @@ TRANSFORM_PRESETS = [
     'svhn',
 ]
 
+
 class CropType(Enum):
     NONE = 'none'
     RANDOM = 'random'
     CENTER = 'center'
     RANDOM_RESIZED = 'random_resized'
 
-def default_cv_train_transform(mean, std, interpolation=InterpolationMode.BILINEAR, flip_prob=None, crop_size=None, crop_type=CropType.NONE, crop_padding=0, autoaug_policy=None, ra_magnitude=9, **kwargs):    
+
+def default_cv_train_transform(
+    mean,
+    std,
+    interpolation=InterpolationMode.BILINEAR,
+    flip_prob=None,
+    crop_size=None,
+    crop_type=CropType.NONE,
+    crop_padding=0,
+    autoaug_policy=None,
+    ra_magnitude=9,
+    **kwargs,
+):
     trans = []
     if crop_type == CropType.RANDOM_RESIZED:
         trans += [transforms.RandomResizedCrop(crop_size, interpolation=interpolation)]
@@ -30,7 +44,7 @@ def default_cv_train_transform(mean, std, interpolation=InterpolationMode.BILINE
         trans += [transforms.CenterCrop(crop_size)]
     if flip_prob:
         trans += [transforms.RandomHorizontalFlip(flip_prob)]
-    
+
     if autoaug_policy == 'rand_augment':
         trans += [transforms.RandAugment(interpolation=interpolation, magnitude=ra_magnitude)]
     elif autoaug_policy == 'trivial_augment':
@@ -68,6 +82,7 @@ def normalize_only(mean, std, **kwargs):
             transforms.Normalize(mean, std),
         ]
     )
+
 
 def create_config_dict(task, preset):
     dct = {

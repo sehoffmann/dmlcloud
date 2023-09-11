@@ -15,8 +15,10 @@ from torch.optim.lr_scheduler import ChainedScheduler, LinearLR
 from ..util import is_hvd_initialized, is_wandb_initialized, set_wandb_startup_timeout
 from .checkpoint import resume_project_dir
 from .metrics import MetricSaver
+from .scaling import scale_lr, scale_param_group
 from .util import (
     git_hash,
+    global_grad_norm,
     log_config,
     log_delimiter,
     log_diagnostics,
@@ -25,9 +27,7 @@ from .util import (
     print_worker,
     setup_horovod,
     setup_logging,
-    global_grad_norm,
 )
-from .scaling import scale_param_group, scale_lr
 
 
 class TrainerInterface:
@@ -100,11 +100,11 @@ class BaseTrainer(TrainerInterface):
     @property
     def is_root(self):
         return hvd.rank() == 0
-    
+
     @property
     def is_train(self):
         return self.mode == 'train'
-    
+
     @property
     def is_eval(self):
         return not self.is_train
@@ -217,7 +217,7 @@ class BaseTrainer(TrainerInterface):
         self.optimizer = hvd.DistributedOptimizer(
             optimizer, named_parameters=self.model.named_parameters(), op=hvd.Adasum if self.cfg.adasum else hvd.Average
         )
-        
+
         schedulers = []
         if self.cfg.rampup_epochs:
             linear_warmup = LinearLR(
@@ -236,7 +236,9 @@ class BaseTrainer(TrainerInterface):
 
     def scale_optimizer(self, optimizer):
         use_gpu = self.device.type == 'cuda'
-        _, lr_scale_factor = scale_lr(optimizer.defaults['lr'], self.cfg.batch_size, self.cfg.base_batch_size, self.cfg.adasum, use_gpu)
+        _, lr_scale_factor = scale_lr(
+            optimizer.defaults['lr'], self.cfg.batch_size, self.cfg.base_batch_size, self.cfg.adasum, use_gpu
+        )
         logging.info(f'LR Scale Factor: {lr_scale_factor}')
         logging.info('Param-Groups:')
         for i, param_group in enumerate(optimizer.param_groups):
@@ -328,7 +330,7 @@ class BaseTrainer(TrainerInterface):
             elif metric == 'ms/batch':
                 self.table[metric] = f'{self.misc_metrics.last["ms_per_batch"]:.1f}'
             elif metric == 'time/epoch':
-                self.table[metric] = str(self.misc_metrics.last['time_per_epoch'])            
+                self.table[metric] = str(self.misc_metrics.last['time_per_epoch'])
             elif len(splits) == 2:
                 group, key = splits[0], splits[1]
                 metrics = self.train_metrics if group == 'train' else self.val_metrics
@@ -386,7 +388,7 @@ class BaseTrainer(TrainerInterface):
         # Do this now, and not later, to immidiately show that a new epoch has started
         if self.is_root and 'Epoch' in self.table.columns:
             self.table['Epoch'] = self.epoch
-        
+
         if hasattr(self.train_dl, 'sampler') and hasattr(self.train_dl.sampler, 'set_epoch'):
             self.train_dl.sampler.set_epoch(self.epoch)
 
@@ -405,7 +407,9 @@ class BaseTrainer(TrainerInterface):
                 self.scaler.scale(loss).backward()  # scale loss and, in turn, gradients to prevent underflow
 
             if loss.isnan() and not self.scaler.is_enabled():
-                logging.critical('Got NaN loss but mixed precision training is disabled! This might be due to NaN values in the data or from diverging training.')
+                logging.critical(
+                    'Got NaN loss but mixed precision training is disabled! This might be due to NaN values in the data or from diverging training.'
+                )
                 sys.exit(1)
 
             self.optimizer.synchronize()  # make sure all async allreduces are done

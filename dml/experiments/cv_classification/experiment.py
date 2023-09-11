@@ -1,9 +1,6 @@
-import argparse
-
 import horovod.torch as hvd
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.optim import AdamW
 
 from ...training import ClassificationTrainer
 from .tasks import TASKS
@@ -24,13 +21,13 @@ class CVClassificationTrainer(ClassificationTrainer):
 
     def create_dataset(self):
         task = TASKS[self.cfg.task]
-        
+
         train_transform = self.create_transform(train=True)
         val_transform = self.create_transform(train=False)
 
         path = self.cfg.data_dir if self.cfg.direct_path else self.cfg.data_dir / task.name
         train, test = task.create_datasets(self.cfg, path, train_transform, val_transform)
-        
+
         train_sampler = torch.utils.data.DistributedSampler(
             train, num_replicas=hvd.size(), rank=hvd.rank(), shuffle=True, seed=self.cfg.seed
         )
@@ -38,9 +35,11 @@ class CVClassificationTrainer(ClassificationTrainer):
             test, num_replicas=hvd.size(), rank=hvd.rank(), shuffle=False, seed=self.cfg.seed
         )
 
-        train_dl = torch.utils.data.DataLoader(train, batch_size=self.cfg.batch_size, sampler=train_sampler, num_workers=4)
+        train_dl = torch.utils.data.DataLoader(
+            train, batch_size=self.cfg.batch_size, sampler=train_sampler, num_workers=4
+        )
         test_dl = torch.utils.data.DataLoader(test, batch_size=self.cfg.batch_size, sampler=val_sampler, num_workers=4)
-        
+
         return train_dl, test_dl
 
     def create_optimizer(self, params, lr):

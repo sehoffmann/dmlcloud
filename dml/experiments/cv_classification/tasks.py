@@ -1,11 +1,26 @@
 import torchvision.datasets as datasets
-from .models import MODEL_CONFIGS
+
 from . import transform
+from .models import MODEL_CONFIGS
 
 CropType = transform.CropType
 
+
 class Task:
-    def __init__(self, name, dataset_cls, num_classes, input_channels, img_size, resize_size=None, mean=None, std=None, crop_type=CropType.NONE, crop_padding=0, random_flips=True):
+    def __init__(
+        self,
+        name,
+        dataset_cls,
+        num_classes,
+        input_channels,
+        img_size,
+        resize_size=None,
+        mean=None,
+        std=None,
+        crop_type=CropType.NONE,
+        crop_padding=0,
+        random_flips=True,
+    ):
         self.name = name
         self.dataset_cls = dataset_cls
         self.num_classes = num_classes
@@ -32,10 +47,20 @@ class Task:
         test = self.dataset_cls(root=path, train=False, transform=val_transform)
         return train, test
 
-class CIFAR10(Task):
 
+class CIFAR10(Task):
     def __init__(self):
-        super().__init__('cifar10', datasets.CIFAR10, 10, 3, 32, mean=(0.4914, 0.4822, 0.4465), std=(0.2470, 0.2435, 0.2616), crop_type=CropType.RANDOM, crop_padding=4)
+        super().__init__(
+            'cifar10',
+            datasets.CIFAR10,
+            10,
+            3,
+            32,
+            mean=(0.4914, 0.4822, 0.4465),
+            std=(0.2470, 0.2435, 0.2616),
+            crop_type=CropType.RANDOM,
+            crop_padding=4,
+        )
 
     def default_config(self, config):
         super().default_config(config)
@@ -45,9 +70,18 @@ class CIFAR10(Task):
 
 
 class CIFAR100(Task):
-
     def __init__(self):
-        super().__init__('cifar100', datasets.CIFAR100, 100, 3, 32, mean=(0.5071, 0.4867, 0.4408), std=(0.2675, 0.2565, 0.2761), crop_type=CropType.RANDOM, crop_padding=4)
+        super().__init__(
+            'cifar100',
+            datasets.CIFAR100,
+            100,
+            3,
+            32,
+            mean=(0.5071, 0.4867, 0.4408),
+            std=(0.2675, 0.2565, 0.2761),
+            crop_type=CropType.RANDOM,
+            crop_padding=4,
+        )
 
     def default_config(self, config):
         super().default_config(config)
@@ -57,9 +91,18 @@ class CIFAR100(Task):
 
 
 class ImageNet(Task):
-
     def __init__(self):
-        super().__init__('imagenet', datasets.ImageNet, 1000, 3, 224, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), crop_type=CropType.RANDOM_RESIZED, resize_size=256)
+        super().__init__(
+            'imagenet',
+            datasets.ImageNet,
+            1000,
+            3,
+            224,
+            mean=(0.485, 0.456, 0.406),
+            std=(0.229, 0.224, 0.225),
+            crop_type=CropType.RANDOM_RESIZED,
+            resize_size=256,
+        )
 
     def default_config(self, config):
         super().default_config(config)
@@ -75,7 +118,6 @@ class ImageNet(Task):
 
 
 class EMNIST(Task):
-
     def __init__(self):
         super().__init__('emnist', datasets.EMNIST, 47, 1, 28, mean=(0.5,), std=(0.5,), random_flips=False)
 
@@ -86,7 +128,6 @@ class EMNIST(Task):
 
 
 class FashionMNIST(Task):
-
     def __init__(self):
         super().__init__('fashion_mnist', datasets.FashionMNIST, 10, 1, 28, mean=(0.5,), std=(0.5,))
 
@@ -97,7 +138,6 @@ class FashionMNIST(Task):
 
 
 class SVHN(Task):
-
     def __init__(self):
         super().__init__('svhn', datasets.SVHN, 10, 3, 32, mean=(0.5,), std=(0.5,))
 
@@ -108,12 +148,5 @@ class SVHN(Task):
         config.epochs = 30
 
 
-_tasks = [
-    CIFAR10(), 
-    CIFAR100(), 
-    ImageNet(), 
-    EMNIST(), 
-    FashionMNIST(), 
-    SVHN()
-]
+_tasks = [CIFAR10(), CIFAR100(), ImageNet(), EMNIST(), FashionMNIST(), SVHN()]
 TASKS = {task.name: task for task in _tasks}

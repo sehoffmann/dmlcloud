@@ -1,8 +1,7 @@
-from . import train
-from . import bench
+from . import bench, train
 
 __all__ = [
-    'bench', 
+    'bench',
     'train',
 ]
 assert __all__ == sorted(__all__)

@@ -2,9 +2,10 @@ import argparse
 
 from ..experiments import ALL_EXPERIMENTS
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-n','--steps', type=int, default=200, help='Number of steps to benchmark')
+    parser.add_argument('-n', '--steps', type=int, default=200, help='Number of steps to benchmark')
     subparsers = parser.add_subparsers(help='Experiment to run')
     subparsers.required = True
 

@@ -1,8 +1,9 @@
 import torch
 from torch import nn
 
-from .trainer import BaseTrainer
 from ..metrics import accuracy, top5_error
+from .trainer import BaseTrainer
+
 
 class ClassificationTrainer(BaseTrainer):
     def forward_step(self, batch_idx, batch):
@@ -11,7 +12,7 @@ class ClassificationTrainer(BaseTrainer):
 
         with torch.no_grad():
             self.log_metric('acc', accuracy(pred, label))
-            self.log_metric('top5_error', top5_error(pred,label))
+            self.log_metric('top5_error', top5_error(pred, label))
 
         return self.loss_fn(pred, label)
 

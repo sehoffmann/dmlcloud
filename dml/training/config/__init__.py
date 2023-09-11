@@ -1,4 +1,4 @@
-from .common import ArgparseVar, SubConfig, ConfigVar
+from .common import ArgparseVar, ConfigVar, SubConfig
 from .config import BaseConfig, DefaultConfig
 from .training import TrainingConfig
 

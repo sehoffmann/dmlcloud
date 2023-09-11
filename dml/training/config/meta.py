@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from ...git import git_hash
-from .common import SubConfig, ConfigVar, ArgparseVar
+from .common import ArgparseVar, ConfigVar, SubConfig
 
 
 class MetaConfig(SubConfig):

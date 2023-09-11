@@ -1,4 +1,3 @@
-
 class ConfigVar:
     def _default_parse_fn(self, config, args):
         val = getattr(args, self.name, None)
@@ -10,7 +9,7 @@ class ConfigVar:
             parse_argument_fn = self._default_parse_fn  # bind self
         self.add_argument_fn = add_argument_fn
         self.parse_argument_fn = parse_argument_fn
-        
+
     def __set_name__(self, owner, name):
         self.name = name
         if not hasattr(owner, '_config_vars'):
@@ -19,10 +18,10 @@ class ConfigVar:
 
     def __get__(self, obj, objtype=None):
         return obj.dct[self.name]
-    
+
     def __set__(self, obj, value):
         obj.dct[self.name] = value
-    
+
     def __delete__(self, obj):
         del obj.dct[self.name]
 
@@ -34,15 +33,14 @@ class ConfigVar:
         if self.parse_argument_fn:
             self.parse_argument_fn(config, args)
 
-class ArgparseVar(ConfigVar):
 
+class ArgparseVar(ConfigVar):
     def _default_add_fn(self, config, parser):
         option = f'--{self.name.replace("_", "-")}'
         args = self.args or [option]
         kwargs = self.kwargs.copy()
         kwargs['dest'] = self.name
-        parser.add_argument(*args,  **kwargs)
-
+        parser.add_argument(*args, **kwargs)
 
     def __init__(self, *args, add_argument_fn=_default_add_fn, parse_argument_fn=ConfigVar._default_parse_fn, **kwargs):
         if add_argument_fn is ArgparseVar._default_add_fn:

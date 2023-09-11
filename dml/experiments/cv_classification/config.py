@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from .experiment import CVClassificationTrainer
 from ...training.config import DefaultConfig, SubConfig
-from .tasks import TASKS
+from .experiment import CVClassificationTrainer
 from .models import MODEL_CONFIGS
+from .tasks import TASKS
 from .transform import TRANSFORM_PRESETS
+
 
 class ExperimentConfig(SubConfig):
     def set_defaults(self):
@@ -14,14 +15,17 @@ class ExperimentConfig(SubConfig):
         self.model_preset = None
         self.train_transform_preset = None
         self.eval_transform_preset = None
-        
 
     def add_arguments(self, parser):
         parser.add_argument('--model', choices=list(MODEL_CONFIGS.keys()), default=None, help='The model to use')
         parser.add_argument('--data', default=None, help='Path to the dataset')
         parser.add_argument('--direct-path', action='store_true', help='Whether to use the direct path for the dataset')
-        parser.add_argument('--train-transform', choices=TRANSFORM_PRESETS, default=None, help='The transform to use for training')
-        parser.add_argument('--eval-transform', choices=TRANSFORM_PRESETS, default=None, help='The transform to use for evaluation')
+        parser.add_argument(
+            '--train-transform', choices=TRANSFORM_PRESETS, default=None, help='The transform to use for training'
+        )
+        parser.add_argument(
+            '--eval-transform', choices=TRANSFORM_PRESETS, default=None, help='The transform to use for evaluation'
+        )
 
     def parse_args(self, args):
         self.task = args.task
@@ -39,7 +43,7 @@ class ExperimentConfig(SubConfig):
     @property
     def task(self):
         return self.dct['task']
-    
+
     @task.setter
     def task(self, value):
         self.dct['task'] = value
@@ -47,7 +51,7 @@ class ExperimentConfig(SubConfig):
     @property
     def data_dir(self):
         return Path(self.dct['data_dir'])
-    
+
     @data_dir.setter
     def data_dir(self, value):
         self.dct['data_dir'] = str(value)
@@ -60,11 +64,10 @@ class ExperimentConfig(SubConfig):
     def model_preset(self, value):
         self.dct['model_preset'] = value
 
-    
     @property
     def train_transform_preset(self):
         return self.dct['train_transform_preset']
-    
+
     @train_transform_preset.setter
     def train_transform_preset(self, value):
         self.dct['train_transform_preset'] = value
@@ -72,7 +75,7 @@ class ExperimentConfig(SubConfig):
     @property
     def eval_transform_preset(self):
         return self.dct['eval_transform_preset']
-    
+
     @eval_transform_preset.setter
     def eval_transform_preset(self, value):
         self.dct['eval_transform_preset'] = value
@@ -87,8 +90,8 @@ def create_config():
 
 def create_trainer(args):
     cfg = create_config()
-    task = TASKS[args.task] 
-    
+    task = TASKS[args.task]
+
     task.default_config(cfg)
     cfg.parse_args(args)
     task.postprocess_config(cfg)

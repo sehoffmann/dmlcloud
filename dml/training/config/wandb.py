@@ -1,4 +1,4 @@
-from .common import SubConfig, ConfigVar, ArgparseVar
+from .common import ArgparseVar, SubConfig
 
 
 class WandbConfig(SubConfig):
@@ -10,5 +10,3 @@ class WandbConfig(SubConfig):
         self.wb_project = None
         self.wb_experiment = None
         self.wb_tags = []
-
-    

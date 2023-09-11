@@ -12,7 +12,6 @@ from ..training.config import DefaultConfig, SubConfig
 
 
 class MNISTModelConfig(SubConfig):
-
     def set_defaults(self):
         self.model_type = 'MLP'
 
