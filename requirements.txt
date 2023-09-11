@@ -1,5 +1,4 @@
 torch
-horovod
 wandb
 numpy
 progress_table

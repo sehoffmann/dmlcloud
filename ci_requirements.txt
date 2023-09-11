@@ -1,2 +1,5 @@
+setuptools
+packaging
+wheel
 pre-commit
 pytest

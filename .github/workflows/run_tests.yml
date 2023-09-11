@@ -15,7 +15,6 @@ jobs:
         os:
           - macos-latest
           - ubuntu-latest
-          - windows-latest
         python-version:
           #- "3.8"
           - "3.9"
@@ -33,11 +32,12 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip3 install -r requirements.txt
+          pip install -r requirements.txt
+          pip install --no-build-isolation horovod[pytorch]
 
       - name: Install Project
         run: |
-          pip3 install .
+          pip install .
 
       - name: Run Tests
         run:

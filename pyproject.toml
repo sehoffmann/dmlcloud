@@ -1,8 +1,27 @@
 [build-system]
-requires = ["setuptools", "pre-commit", "pytest"]
+requires = ["setuptools", "packaging", "wheel", "pre-commit", "pytest"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "dml"
+authors = [
+    {name = "Sebastian Hoffmann"}
+]
+description = "Distributed torch training using horovod and slurm"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+keywords = ["pytorch", "horovod", "slurm", "distributed", "training"]
+dynamic = ["version", "readme", "dependencies"]
+
+[project.urls]
+Repository = "https://github.com/sehoffmann/dml"
+
+[tool.setuptools.dynamic]
+version = {attr = "dml.__version__"}
+readme = {file = ["README.md"], content-type = "text/markdown"}
+dependencies = {file = ["requirements.txt"]}
 
 [tool.black]
 skip-string-normalization = true
 line-length = 120
-target-version = ["py37"]
+target-version = ["py39"]
