@@ -1,0 +1,89 @@
+name: Build and Upload Wheel
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+      do-upload:
+        required: false
+        default: true
+        type: boolean
+      real-pypi:
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      PYPI_TOKEN:
+        required: true
+
+jobs:
+  wheel_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ inputs.branch }}
+        submodules: recursive
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup_environment
+
+      - name: Build Wheel
+        run: |
+          python3 -m build
+
+      - name: Upload Wheels to Github
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist/*.whl
+
+  wheel_upload:
+    if: inputs.do-upload == true
+    needs: [wheel_build]
+    runs-on: ubuntu-latest
+    outputs:
+      upload: ${{ steps.trigger_upload.outputs.value }}
+    steps:
+      - name: Download Artifacts From Github
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: wheels
+
+      - name: Determine If Wheel Uploading Is Needed
+        run: |
+          upload=false
+          for txt in *.whl; do
+            upload=true
+            break
+          done
+          echo "value=$upload" >> $GITHUB_OUTPUT
+        id: trigger_upload
+
+      - name: Display All Wheels
+        if: steps.trigger_upload.outputs.value == 'true'
+        run: ls -lh *.whl
+
+      - name: Upload Wheels to PyPI
+        if: |
+          steps.trigger_upload.outputs.value == 'true'
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          pip3 install twine
+          if [[ "${{ inputs.real-pypi }}" == true ]]; then
+            python -m twine upload \
+              --username __token__ \
+              --password "$PYPI_TOKEN" \
+              *.whl
+          else
+            python -m twine upload \
+              -r testpypi \
+              --username __token__ \
+              --password "$PYPI_TOKEN" \
+              *.whl
+          fi

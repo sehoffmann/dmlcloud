@@ -1,0 +1,27 @@
+name: Run Linting
+
+on:
+  push:
+    branches:
+      - develop
+    tags:  # ignores pushes to tags
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup_environment
+
+      - name: Lint
+        run: pre-commit run --all-files
+
+      - name: Required modifications
+        if: ${{ failure() }}
+        run: git --no-pager diff
