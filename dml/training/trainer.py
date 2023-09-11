@@ -71,6 +71,12 @@ class TrainerInterface:
         """
         raise NotImplementedError()
 
+    def forward_step(self, batch_idx, batch):
+        """
+        Performs a forward pass and returns the loss.
+        """
+        raise NotImplementedError()
+
 
 class BaseTrainer(TrainerInterface):
     def __init__(self, config, val_loss_name='loss'):
