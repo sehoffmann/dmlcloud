@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from ...git import git_hash
+from dmlcloud.util import git_hash
 from .common import ArgparseVar, ConfigVar, SubConfig
 
 
