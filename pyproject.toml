@@ -11,6 +11,14 @@ description = "Distributed torch training using horovod and slurm"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
 keywords = ["pytorch", "horovod", "slurm", "distributed", "training"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.9",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dynamic = ["version", "readme", "dependencies"]
 
 [project.urls]
