@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from ..metrics import accuracy, top5_error
+from dmlcloud.util import accuracy, top5_error
 from .trainer import BaseTrainer
 
 

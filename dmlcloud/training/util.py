@@ -7,7 +7,7 @@ import horovod.torch as hvd
 import torch
 from torch.utils._foreach_utils import _group_tensors_by_device_and_dtype
 
-from ..git import git_diff, git_hash
+from dmlcloud.util import git_diff, git_hash
 from .checkpoint import ExtendedJSONEncoder
 
 

@@ -12,7 +12,7 @@ from progress_table import ProgressTable
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import ChainedScheduler, LinearLR
 
-from ..util import is_hvd_initialized, is_wandb_initialized, set_wandb_startup_timeout
+from dmlcloud.util import is_hvd_initialized, is_wandb_initialized, set_wandb_startup_timeout
 from .checkpoint import resume_project_dir
 from .metrics import MetricSaver
 from .scaling import scale_lr, scale_param_group
