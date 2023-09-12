@@ -202,12 +202,17 @@ class BaseTrainer(TrainerInterface):
     def setup_dataset(self):
         logging.info('Creating dataset')
         hvd.barrier()
+        ts = datetime.now()
         if hvd.rank() == 0:
             self.train_dl, self.val_dl = self.create_dataset()
             hvd.barrier()
         else:
             hvd.barrier()  # wait until rank 0 has created the dataset (e.g. downloaded it)
             self.train_dl, self.val_dl = self.create_dataset()
+        logging.info(f'Dataset creation took {(datetime.now() - ts).total_seconds():.1f}s')
+        logging.info(f'Train dataset size: {len(self.train_dl.dataset)}')
+        logging.info(f'  Val dataset size: {len(self.val_dl.dataset)}')
+        log_delimiter()
 
     def setup_model(self):
         logging.info('Creating model')
@@ -216,6 +221,7 @@ class BaseTrainer(TrainerInterface):
         if self.is_root and self.use_checkpointing:
             with open(self.model_dir / 'model.txt', 'w') as f:
                 f.write(str(self.model))
+        log_delimiter()
 
     def setup_loss(self):
         self.loss_fn = self.create_loss()
