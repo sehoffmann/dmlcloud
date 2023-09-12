@@ -1,7 +1,8 @@
 from .evaluation import accuracy, top5_error
 from .git import git_diff, git_hash, run_in_project
-from .util import EnumAction, is_wandb_initialized, set_wandb_startup_timeout
-from .horovod import hvd_is_initialized, hvd_allreduce, setup_horovod, hvd_print_worker
+from .horovod import hvd_allreduce, hvd_is_initialized, hvd_print_worker, setup_horovod
+from .util import EnumAction
+from .wandb import wandb_is_initialized, wandb_set_startup_timeout
 
 __all__ = [
     'accuracy',
@@ -14,6 +15,6 @@ __all__ = [
     'hvd_print_worker',
     'hvd_allreduce',
     'setup_horovod',
-    'is_wandb_initialized',
-    'set_wandb_startup_timeout',
+    'wandb_is_initialized',
+    'wandb_set_startup_timeout',
 ]

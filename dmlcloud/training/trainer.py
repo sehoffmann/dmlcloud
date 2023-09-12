@@ -12,7 +12,13 @@ from progress_table import ProgressTable
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import ChainedScheduler, LinearLR
 
-from dmlcloud.util import hvd_is_initialized, is_wandb_initialized, set_wandb_startup_timeout
+from dmlcloud.util import (
+    hvd_is_initialized,
+    hvd_print_worker,
+    setup_horovod,
+    wandb_is_initialized,
+    wandb_set_startup_timeout,
+)
 from .checkpoint import resume_project_dir
 from .metrics import MetricSaver
 from .scaling import scale_lr, scale_param_group
@@ -26,8 +32,6 @@ from .util import (
     log_model,
     setup_logging,
 )
-
-from dmlcloud.util import hvd_print_worker, setup_horovod
 
 
 class TrainerInterface:
@@ -184,7 +188,7 @@ class BaseTrainer(TrainerInterface):
         if not self.is_root:
             return
 
-        set_wandb_startup_timeout(600)
+        wandb_set_startup_timeout(600)
         wandb.init(
             project=self.cfg.wb_project,
             name=self.cfg.wb_experiment,
@@ -312,7 +316,7 @@ class BaseTrainer(TrainerInterface):
         torch.save(self.state_dict(), checkpoint_path)
         if self.is_best_epoch():
             torch.save(self.state_dict(), best_path)
-            if is_wandb_initialized():
+            if wandb_is_initialized():
                 wandb.save(str(best_path), policy='now', base_path=str(self.model_dir))
 
         self.train_metrics.scalars_to_csv(self.model_dir / 'train_metrics.csv')
@@ -347,7 +351,7 @@ class BaseTrainer(TrainerInterface):
 
         self.table.next_row()
 
-        if is_wandb_initialized():
+        if wandb_is_initialized():
             self.log_wandb()
 
     def log_wandb(self):

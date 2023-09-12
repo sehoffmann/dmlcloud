@@ -1,8 +1,8 @@
-import sys
 import os
+import sys
 
-import torch
 import horovod.torch as hvd
+import torch
 
 
 def hvd_print_worker(msg, barrier=True, flush=True):
