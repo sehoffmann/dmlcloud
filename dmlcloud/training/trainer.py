@@ -12,7 +12,7 @@ from progress_table import ProgressTable
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import ChainedScheduler, LinearLR
 
-from dmlcloud.util import is_hvd_initialized, is_wandb_initialized, set_wandb_startup_timeout
+from dmlcloud.util import hvd_is_initialized, is_wandb_initialized, set_wandb_startup_timeout
 from .checkpoint import resume_project_dir
 from .metrics import MetricSaver
 from .scaling import scale_lr, scale_param_group
@@ -24,10 +24,10 @@ from .util import (
     log_diagnostics,
     log_git,
     log_model,
-    print_worker,
-    setup_horovod,
     setup_logging,
 )
+
+from dmlcloud.util import hvd_print_worker, setup_horovod
 
 
 class TrainerInterface:
@@ -119,7 +119,7 @@ class BaseTrainer(TrainerInterface):
         if self.initialized:
             raise ValueError('Trainer already initialized! Call reset() first.')
 
-        if not is_hvd_initialized():
+        if not hvd_is_initialized():
             setup_horovod()
 
         self.seed()
@@ -496,7 +496,7 @@ class BaseTrainer(TrainerInterface):
         self.post_eval()
 
     def pre_training(self):
-        print_worker('READY')
+        hvd_print_worker('READY')
         self.start_time = datetime.now()
         logging.info('Starting training...')
 

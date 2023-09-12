@@ -7,32 +7,8 @@ import horovod.torch as hvd
 import torch
 from torch.utils._foreach_utils import _group_tensors_by_device_and_dtype
 
-from dmlcloud.util import git_diff, git_hash
+from dmlcloud.util import git_diff, git_hash, hvd_print_worker
 from .checkpoint import ExtendedJSONEncoder
-
-
-def print_worker(msg, barrier=True):
-    if barrier:
-        hvd.barrier()
-    print(f'Worker {hvd.rank()} ({hvd.cross_rank()}.{hvd.local_rank()}): {msg}', flush=True)
-    if barrier:
-        hvd.barrier()
-
-
-def setup_horovod(print_status=True):
-    hvd.init()
-    n_tasks = int(os.environ.get('SLURM_NTASKS', 0))
-    if n_tasks > 1 and hvd.size() == 1:
-        print(
-            'CRITICAL: Horovod only sees a single task! Run "horovodrun --check-build" an verify that MPI is supported. Terminating...'
-        )
-        sys.exit(1)
-
-    if print_status:
-        print_worker('STARTED')
-
-    hvd.barrier()  # make sure that all processes are running at this point
-    # this is very important, otherwise subsequent broadcast operations might time out
 
 
 def setup_logging():
@@ -87,7 +63,7 @@ def log_diagnostics(device):
     msg += f'CUDA_VISIBLE_DEVICES = {os.environ.get("CUDA_VISIBLE_DEVICES")}\n'
     msg += f'Device count: {torch.cuda.device_count()}'
     logging.info(msg)
-    print_worker(f'Using {device}')
+    hvd_print_worker(f'Using {device}')
     log_delimiter()
 
 
