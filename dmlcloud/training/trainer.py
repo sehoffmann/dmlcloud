@@ -212,6 +212,17 @@ class BaseTrainer(TrainerInterface):
         logging.info(f'Dataset creation took {(datetime.now() - ts).total_seconds():.1f}s')
         logging.info(f'Train dataset size: {len(self.train_dl.dataset)}')
         logging.info(f'  Val dataset size: {len(self.val_dl.dataset)}')
+        
+        train_sizes = hvd.allgather(torch.tensor([len(self.train_dl)]), name='train_dataset_size')
+        train_sizes = [t.item() for t in train_sizes]
+        if len(set(train_sizes)) > 1 and self.is_root:
+            logging.warning(f'Uneven train dataset batches: {train_sizes}')
+
+        val_sizes = hvd.allgather(torch.tensor([len(self.val_dl)]), name='val_dataset_size')
+        val_sizes = [t.item() for t in val_sizes]
+        if len(set(val_sizes)) > 1 and self.is_root:
+            logging.warning(f'Uneven val dataset batches: {val_sizes}')
+
         log_delimiter()
 
     def setup_model(self):
