@@ -453,6 +453,8 @@ class BaseTrainer(TrainerInterface):
             self.misc_metrics.log_metric('n_steps', 1, hvd.Sum, allreduce=False)
             self.misc_metrics.log_metric('n_total_batches', 1, hvd.Sum, allreduce=True)
 
+        hvd.join() # prevents hangup on allreduce() due to uneven sharding
+
         self.misc_metrics.log_python_object('lr', self.scheduler.get_last_lr()[0])
         for k, v in self.scaler.state_dict().items():
             self.misc_metrics.log_python_object(f'scaler/{k}', v)
@@ -502,6 +504,8 @@ class BaseTrainer(TrainerInterface):
                 with torch.no_grad():
                     loss = self.forward_step(batch_idx, batch).item()
                     self.log_metric('loss', loss)
+
+        hvd.join() # prevents hangup on allreduce() due to uneven sharding
 
         self.post_eval()
 
