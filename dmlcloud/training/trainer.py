@@ -165,13 +165,14 @@ class BaseTrainer(TrainerInterface):
         self.table = ProgressTable(columns=self.metric_names(), print_row_on_update=False)
 
     def setup_general(self):
+        setup_logging()
+
         if torch.cuda.is_available():
             self.device = torch.device('cuda', hvd.local_rank())
         else:
             self.device = torch.device('cpu')
 
         torch.set_num_threads(8)
-        setup_logging()
         self.cfg.git_hash = git_hash()
 
     def seed(self):
