@@ -213,7 +213,7 @@ class BaseTrainer(TrainerInterface):
         logging.info(f'Dataset creation took {(datetime.now() - ts).total_seconds():.1f}s')
         logging.info(f'Train dataset size: {len(self.train_dl.dataset)}')
         logging.info(f'  Val dataset size: {len(self.val_dl.dataset)}')
-        
+
         train_sizes = hvd.allgather(torch.tensor([len(self.train_dl)]), name='train_dataset_size')
         train_sizes = [t.item() for t in train_sizes]
         if len(set(train_sizes)) > 1 and self.is_root:
@@ -465,7 +465,7 @@ class BaseTrainer(TrainerInterface):
             self.misc_metrics.log_metric('n_steps', 1, hvd.Sum, allreduce=False)
             self.misc_metrics.log_metric('n_total_batches', 1, hvd.Sum, allreduce=True)
 
-        hvd.join() # prevents hangup on allreduce() due to uneven sharding
+        hvd.join()  # prevents hangup on allreduce() due to uneven sharding
 
         self.misc_metrics.log_python_object('lr', self.scheduler.get_last_lr()[0])
         for k, v in self.scaler.state_dict().items():
@@ -517,7 +517,7 @@ class BaseTrainer(TrainerInterface):
                     loss = self.forward_step(batch_idx, batch).item()
                     self.log_metric('loss', loss)
 
-        hvd.join() # prevents hangup on allreduce() due to uneven sharding
+        hvd.join()  # prevents hangup on allreduce() due to uneven sharding
 
         self.post_eval()
 
