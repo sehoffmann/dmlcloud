@@ -6,7 +6,7 @@ from datetime import datetime
 import horovod.torch as hvd
 from wandb.sdk.lib.runid import generate_id
 
-from .config import DefaultConfig
+from dmlcloud.config import DefaultConfig
 
 
 class ExtendedJSONEncoder(json.JSONEncoder):
