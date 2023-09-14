@@ -41,6 +41,13 @@ class TrainerInterface:
     These methods must be implemented for each experiment
     """
 
+    def create_loss(self):
+        """
+        Returns a loss function.
+        Will be available as self.loss_fn.
+        """
+        return None
+
     def create_dataset(self):
         """
         Returns a tuple of (train_dl, val_dl).
@@ -57,10 +64,10 @@ class TrainerInterface:
         """
         raise NotImplementedError()
 
-    def create_loss(self):
+    def create_optimizer(self, params, lr):
         """
-        Returns a loss function.
-        Will be available as self.loss_fn.
+        Returns an optimizer.
+        Will be available as self.optimizer.
         """
         raise NotImplementedError()
 
@@ -69,13 +76,6 @@ class TrainerInterface:
         Returns a scheduler or None.
         """
         return None
-
-    def create_optimizer(self, params, lr):
-        """
-        Returns an optimizer.
-        Will be available as self.optimizer.
-        """
-        raise NotImplementedError()
 
     def forward_step(self, batch_idx, batch):
         """
@@ -140,9 +140,9 @@ class BaseTrainer(TrainerInterface):
         if print_diagnostics:
             self.print_diagnositcs()
 
+        self.setup_loss()
         self.setup_dataset()
         self.setup_model()
-        self.setup_loss()
         self.setup_optimizer()
         self.resume_training()
 
