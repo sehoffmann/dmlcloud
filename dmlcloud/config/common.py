@@ -71,8 +71,9 @@ class SubConfig:
             return self.root_dct[self.key]
 
     def add_arguments(self, parser):
+        group = parser.add_argument_group(self.key)
         for cfg_var in self._config_vars:
-            cfg_var.add_argument(self, parser)
+            cfg_var.add_argument(self, group)
 
     def parse_args(self, args):
         for cfg_var in self._config_vars:
