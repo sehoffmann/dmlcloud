@@ -1,10 +1,4 @@
-import subprocess
-from pathlib import Path
-
-
-def run_in_project(cmd):
-    project_dir = Path(__file__).absolute().parent
-    return subprocess.run(cmd, cwd=project_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+from .project import run_in_project
 
 
 def git_hash(short=False):

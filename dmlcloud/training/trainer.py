@@ -15,6 +15,8 @@ from torch.optim.lr_scheduler import ChainedScheduler, LinearLR
 from dmlcloud.util import (
     hvd_is_initialized,
     hvd_print_worker,
+    project_dir,
+    script_path,
     setup_horovod,
     wandb_is_initialized,
     wandb_set_startup_timeout,
@@ -156,6 +158,8 @@ class BaseTrainer(TrainerInterface):
 
     def print_diagnositcs(self):
         log_delimiter()
+        logging.info(f'Script path: {script_path()}')
+        logging.info(f'Project dir: {project_dir()}')
         log_git()
         log_diagnostics(self.device)
 
