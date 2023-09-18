@@ -7,16 +7,18 @@ from .common import ArgparseVar, ConfigVar, SubConfig
 
 class MetaConfig(SubConfig):
     trainer_cls = ConfigVar()
-    project_dir = ArgparseVar('-d', '--dir', type=Path, help='The project directory')
     model_dir = ConfigVar()
-    id_prefix = ArgparseVar('--prefix', type=str, help='The id prefix for the experiment')
+    job_id = ConfigVar()
     command_line = ConfigVar()
     git_hash = ConfigVar()
+    checkpoint_dir = ArgparseVar('-d', '--dir', type=Path, help='The directory where runs are stored')
+    name = ArgparseVar('-n', '--name', help='The name of the experiment')
 
     def set_defaults(self):
         self.trainer_cls = None
-        self.project_dir = Path('./').resolve()
         self.model_dir = None
-        self.id_prefix = ''
+        self.job_id = None
         self.command_line = ' '.join(sys.argv)
         self.git_hash = git_hash()
+        self.checkpoint_dir = Path('./models').resolve()
+        self.name = None

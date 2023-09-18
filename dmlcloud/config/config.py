@@ -12,6 +12,7 @@ class BaseConfig:
 
         self._sub_configs = []
         self._setup_sub_configs()
+        self.set_defaults()
 
         if dct:
             self.dct.update(dct)
@@ -56,6 +57,9 @@ class BaseConfig:
 
     def as_dictionary(self):
         return dict(self.dct)
+
+    def set_defaults(self):
+        pass
 
 
 class DefaultConfig(BaseConfig):

@@ -42,16 +42,15 @@ def get_slurm_id():
     return os.environ.get('SLURM_JOB_ID')
 
 
-def find_old_checkpoint(base_dir, id_prefix):
+def find_old_checkpoint(base_dir):
     slurm_id = get_slurm_id()
-    slurm_dir = next(iter(base_dir.glob(f'*-{id_prefix}{slurm_id}')), None)
+    checkpoints = list(base_dir.glob(f'*-{slurm_id} *'))
 
-    if get_config_path(base_dir).exists():
-        model_dir = base_dir
-        job_id = base_dir.stem.split('-', 1)[0]
-    elif slurm_id and slurm_dir is not None:
-        model_dir = slurm_dir
-        job_id = id_prefix + slurm_id
+    if slurm_id and len(checkpoints) == 1:
+        # if there exists multiple possible checkpoints, we don't know which one to resume
+        # usually only happens for interactive sessions
+        model_dir = checkpoints[0]
+        job_id = model_dir.name.split(' ')[0]
     else:
         job_id = None
         model_dir = None
@@ -63,18 +62,21 @@ def sanitize_filename(filename):
     return filename.replace('/', '_')
 
 
-def create_project_dir(base_dir, config):
+def generate_job_id():
     slurm_id = get_slurm_id()
-    job_id = hvd.broadcast_object(slurm_id if slurm_id else generate_id(), name='job_id')
-    job_id = config.id_prefix + job_id
-
+    job_id = slurm_id if slurm_id else generate_id()
     date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+    job_id = f'{date_str}-{job_id}'
+    return job_id
 
-    name = f'{date_str}-{job_id}'
-    if config.wb_experiment:
-        name += ' ' + sanitize_filename(config.wb_experiment)
 
-    model_dir = hvd.broadcast_object(base_dir / name, name='model_dir')
+def create_project_dir(base_dir, config):
+    job_id = hvd.broadcast_object(generate_job_id(), name='job_id')
+    dir_name = job_id
+    if config.name:
+        dir_name += ' ' + sanitize_filename(config.name)
+
+    model_dir = hvd.broadcast_object(base_dir / dir_name, name='model_dir')
 
     if hvd.rank() == 0:
         os.makedirs(model_dir)
@@ -83,18 +85,18 @@ def create_project_dir(base_dir, config):
     return model_dir, job_id
 
 
-def resume_project_dir(base_dir, config):
-    model_dir, job_id = find_old_checkpoint(base_dir, config.id_prefix)
-    if model_dir is not None:
-        parsed_dct = load_config_dct(get_config_path(model_dir))
+def resume_project_dir(config):
+    config.model_dir, config.job_id = find_old_checkpoint(config.checkpoint_dir)
+    is_resumed = config.model_dir is not None
+    if is_resumed:
+        parsed_dct = load_config_dct(get_config_path(config.model_dir))
         consistency_check(parsed_dct, config)
-        is_resumed = True
-        logging.info(f'Resuming run from {model_dir}')
+        logging.info(f'Resuming run from {config.model_dir}')
     else:
-        model_dir, job_id = create_project_dir(base_dir, config)
-        is_resumed = False
-        logging.info(f'Created run directory {model_dir}')
-    return model_dir, job_id, is_resumed
+        config.model_dir, config.job_id = create_project_dir(config.checkpoint_dir, config)
+        logging.info(f'Created run directory {config.model_dir}')
+
+    return is_resumed
 
 
 def consistency_check(parsed_dct, config):

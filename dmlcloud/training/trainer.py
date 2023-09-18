@@ -92,8 +92,6 @@ class BaseTrainer(TrainerInterface):
 
     def reset(self):
         self.initialized = False
-        self.model_dir = None
-        self.job_id = None
         self.is_resumed = False
         self.train_metrics = MetricSaver()
         self.val_metrics = MetricSaver()
@@ -121,6 +119,14 @@ class BaseTrainer(TrainerInterface):
     def is_eval(self):
         return not self.is_train
 
+    @property
+    def model_dir(self):
+        return self.cfg.model_dir
+
+    @property
+    def job_id(self):
+        return self.cfg.job_id
+
     def setup_all(self, use_checkpointing=True, use_wandb=True, print_diagnostics=True):
         if self.initialized:
             raise ValueError('Trainer already initialized! Call reset() first.')
@@ -132,7 +138,7 @@ class BaseTrainer(TrainerInterface):
         self.setup_general()
 
         if use_checkpointing:
-            self.model_dir, self.job_id, self.is_resumed = resume_project_dir(self.cfg.project_dir, self.cfg)
+            self.is_resumed = resume_project_dir(self.cfg)
 
         if use_wandb:
             self.setup_wandb()
@@ -194,9 +200,10 @@ class BaseTrainer(TrainerInterface):
             return
 
         wandb_set_startup_timeout(600)
+        exp_name = self.cfg.wb_name if self.cfg.wb_name else self.cfg.name
         wandb.init(
             project=self.cfg.wb_project,
-            name=self.cfg.wb_experiment,
+            name=exp_name,
             tags=self.cfg.wb_tags,
             dir=self.model_dir,
             id=self.job_id,
