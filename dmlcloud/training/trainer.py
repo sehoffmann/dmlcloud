@@ -372,6 +372,7 @@ class BaseTrainer(TrainerInterface):
             metric_names = {name: name for name in metric_names}
         for display_name, metric_name in metric_names.items():
             splits = metric_name.split('/', 1)
+            value = None
             if metric_name == 'Epoch':
                 value = str(self.epoch)
             elif metric_name == 'ETA':
