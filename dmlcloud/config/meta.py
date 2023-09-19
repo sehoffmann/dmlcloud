@@ -20,5 +20,5 @@ class MetaConfig(SubConfig):
         self.job_id = None
         self.command_line = ' '.join(sys.argv)
         self.git_hash = git_hash()
-        self.checkpoint_dir = Path('./models').resolve()
+        self.checkpoint_dir = Path('./checkpoints').resolve()
         self.name = None
