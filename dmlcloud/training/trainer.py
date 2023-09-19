@@ -85,6 +85,18 @@ class TrainerInterface:
 
 
 class BaseTrainer(TrainerInterface):
+    @staticmethod
+    def root_only(fn):
+        """
+        Decorator for methods that should only be called on the root rank.
+        """
+
+        def wrapper(self, *args, **kwargs):
+            if self.is_root:
+                return fn(self, *args, **kwargs)
+
+        return wrapper
+
     def __init__(self, config, val_loss_name='loss'):
         self.cfg = config
         self.val_loss_name = val_loss_name
@@ -169,9 +181,8 @@ class BaseTrainer(TrainerInterface):
         log_git()
         log_diagnostics(self.device)
 
+    @root_only
     def setup_table(self):
-        if not self.is_root:
-            return
         self.table = ProgressTable(columns=self.metric_names(), print_row_on_update=False)
 
     def setup_general(self):
@@ -195,10 +206,8 @@ class BaseTrainer(TrainerInterface):
         torch.manual_seed(self.cfg.seed)
         torch.cuda.manual_seed(self.cfg.seed)
 
+    @root_only
     def setup_wandb(self):
-        if not self.is_root:
-            return
-
         wandb_set_startup_timeout(600)
         exp_name = self.cfg.wb_name if self.cfg.wb_name else self.cfg.name
         wandb.init(
@@ -215,7 +224,7 @@ class BaseTrainer(TrainerInterface):
         logging.info('Creating dataset')
         hvd.barrier()
         ts = datetime.now()
-        if hvd.rank() == 0:
+        if self.is_root:
             self.train_dl, self.val_dl = self.create_dataset()
             hvd.barrier()
         else:
@@ -335,8 +344,9 @@ class BaseTrainer(TrainerInterface):
             logging.critical('No checkpoint found!')
             sys.exit(1)
 
+    @root_only
     def save_checkpoint(self):
-        if not self.is_root or not self.use_checkpointing:
+        if not self.use_checkpointing:
             return
 
         checkpoint_path = self.model_dir / 'checkpoint.pt'
@@ -356,30 +366,33 @@ class BaseTrainer(TrainerInterface):
         best_val_loss = min(self.val_metrics.get_metrics(self.val_loss_name))
         return self.val_metrics.last[self.val_loss_name] == best_val_loss
 
-    def log_epoch(self):
-        if not self.is_root:
-            return
-
-        for metric in self.metric_names():
-            splits = metric.split('/', 1)
-            if metric == 'Epoch':
-                continue
-            elif metric == 'ETA':
-                self.table[metric] = str(self.misc_metrics.last['eta'])
-            elif metric == 'ms/batch':
-                self.table[metric] = f'{self.misc_metrics.last["ms_per_batch"]:.1f}'
-            elif metric == 'time/epoch':
-                self.table[metric] = str(self.misc_metrics.last['time_per_epoch'])
+    def _update_table_entries(self):
+        metric_names = self.metric_names()
+        if isinstance(metric_names, list):
+            metric_names = {name: name for name in metric_names}
+        for display_name, metric_name in metric_names.items():
+            splits = metric_name.split('/', 1)
+            if metric_name == 'Epoch':
+                value = str(self.epoch)
+            elif metric_name == 'ETA':
+                value = str(self.misc_metrics.last['eta'])
+            elif metric_name == 'ms/batch':
+                value = f'{self.misc_metrics.last["ms_per_batch"]:.1f}'
+            elif metric_name == 'time/epoch':
+                value = str(self.misc_metrics.last['time_per_epoch'])
             elif len(splits) == 2:
                 group, key = splits[0], splits[1]
                 metrics = self.train_metrics if group == 'train' else self.val_metrics
                 if key in metrics.last:
-                    self.table[metric] = metrics.last[key]
+                    value = metrics.last[key]
             else:
-                raise ValueError(f'Invalid metric name: {metric}')
-
+                raise ValueError(f'Invalid metric name: {metric_name}')
+            self.table[display_name] = value
         self.table.next_row()
 
+    @root_only
+    def log_epoch(self):
+        self._update_table_entries()
         if wandb_is_initialized():
             self.log_wandb()
 
@@ -562,7 +575,8 @@ class BaseTrainer(TrainerInterface):
 
     def metric_names(self):
         """
-        Returns a list with custom metrics that are displayed during training.
+        Returns a list or dictionary with custom metrics that are displayed during training.
+        If a dictionary is returned, the keys are used as display names.
         """
         columns = ['Epoch', 'ETA', 'train/loss']
         if self.val_dl is not None:
