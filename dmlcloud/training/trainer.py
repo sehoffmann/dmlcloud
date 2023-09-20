@@ -242,10 +242,11 @@ class BaseTrainer(TrainerInterface):
         if len(set(train_sizes)) > 1 and self.is_root:
             logging.warning(f'Uneven train dataset batches: {train_sizes}')
 
-        val_sizes = hvd.allgather(torch.tensor([len(self.val_dl)]), name='val_dataset_size')
-        val_sizes = [t.item() for t in val_sizes]
-        if len(set(val_sizes)) > 1 and self.is_root:
-            logging.warning(f'Uneven val dataset batches: {val_sizes}')
+        if self.val_dl is not None:
+            val_sizes = hvd.allgather(torch.tensor([len(self.val_dl)]), name='val_dataset_size')
+            val_sizes = [t.item() for t in val_sizes]
+            if len(set(val_sizes)) > 1 and self.is_root:
+                logging.warning(f'Uneven val dataset batches: {val_sizes}')
 
         log_delimiter()
 
