@@ -231,8 +231,11 @@ class BaseTrainer(TrainerInterface):
             hvd.barrier()  # wait until rank 0 has created the dataset (e.g. downloaded it)
             self.train_dl, self.val_dl = self.create_dataset()
         logging.info(f'Dataset creation took {(datetime.now() - ts).total_seconds():.1f}s')
-        logging.info(f'Train dataset size: {len(self.train_dl.dataset)}')
-        logging.info(f'  Val dataset size: {len(self.val_dl.dataset)}')
+
+        if hasattr(self.train_dl, 'dataset') and hasattr(self.train_dl.dataset, '__len__'):
+            logging.info(f'Train dataset size: {len(self.train_dl.dataset)}')
+        if hasattr(self.val_dl, 'dataset') and hasattr(self.val_dl.dataset, '__len__'):
+            logging.info(f'  Val dataset size: {len(self.val_dl.dataset)}')
 
         train_sizes = hvd.allgather(torch.tensor([len(self.train_dl)]), name='train_dataset_size')
         train_sizes = [t.item() for t in train_sizes]
