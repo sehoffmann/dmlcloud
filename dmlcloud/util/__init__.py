@@ -1,7 +1,7 @@
 from dmlcloud.util.project import project_dir, run_in_project, script_dir, script_path
 from .evaluation import accuracy, top5_error
 from .git import git_diff, git_hash
-from .horovod import hvd_allreduce, hvd_is_initialized, hvd_print_worker, setup_horovod, shard_indices
+from .distributed import print_worker, shard_indices
 from .util import EnumAction
 from .wandb import wandb_is_initialized, wandb_set_startup_timeout
 
@@ -11,9 +11,7 @@ __all__ = [
     'git_diff',
     'git_hash',
     'EnumAction',
-    'hvd_is_initialized',
-    'hvd_print_worker',
-    'hvd_allreduce',
+    'print_worker',
     'setup_horovod',
     'shard_indices',
     'wandb_is_initialized',
@@ -21,5 +19,6 @@ __all__ = [
     'run_in_project',
     'script_dir',
     'script_path',
+    'shard_indices',
     'project_dir',
 ]

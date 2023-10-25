@@ -3,17 +3,17 @@ import logging
 import os
 import sys
 
-import horovod.torch as hvd
 import torch
+import torch.distributed as dist
 from torch.utils._foreach_utils import _group_tensors_by_device_and_dtype
 
-from dmlcloud.util import git_diff, git_hash, hvd_print_worker
+from dmlcloud.util import git_diff, git_hash, print_worker
 from .checkpoint import ExtendedJSONEncoder
 
 
 def setup_logging():
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO if hvd.rank() == 0 else logging.WARNING)
+    root_logger.setLevel(logging.INFO if dist.get_rank() == 0 else logging.WARNING)
 
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.DEBUG)
@@ -38,7 +38,8 @@ def log_delimiter(n=40):
 
 
 def log_diagnostics(device):
-    msg = f'Training distributed on {hvd.size()} workers/gpus\n'
+    msg = f'Training distributed on {dist.get_world_size()} workers/gpus\n'
+    msg += f'Using torch.distributed backend: {dist.get_backend()}\n'
     msg += delimiter()
     msg += f'SLURM_JOB_ID = {os.environ.get("SLURM_JOB_ID")}\n'
     msg += f'SLURM_STEP_ID = {os.environ.get("SLURM_STEP_ID")}\n'
@@ -49,21 +50,14 @@ def log_diagnostics(device):
     msg += f'SLURM_CPUS_PER_TASK = {os.environ.get("SLURM_CPUS_PER_TASK")}\n'
     msg += f'SLURM_CPU_BIND_LIST = {os.environ.get("SLURM_CPU_BIND_LIST")}\n'
     msg += delimiter()
-    msg += f'MPI built: {hvd.mpi_built()}\n'
-    msg += f'NCCL built: {hvd.nccl_built() > 0}\n'
-    msg += f'Gloo built: {hvd.gloo_built()}\n'
-    msg += f'CUDA built: {hvd.cuda_built()}\n'
-    msg += f'DDL built: {hvd.ddl_built()}\n'
-    msg += f'ROCm built: {hvd.rocm_built()}\n'
-    msg += f'oneCCL built: {hvd.ccl_built()}\n'
-    msg += delimiter()
-    msg += f'MPI enabled: {hvd.mpi_enabled()}\n'
-    msg += f'Gloo enabled: {hvd.gloo_enabled()}\n'
+    msg += f'Gloo available: {dist.is_gloo_available()}\n'
+    msg += f'NCCL available: {dist.is_nccl_available()}\n'
+    msg += f'MPI available: {dist.is_mpi_available()}\n'
     msg += delimiter()
     msg += f'CUDA_VISIBLE_DEVICES = {os.environ.get("CUDA_VISIBLE_DEVICES")}\n'
     msg += f'Device count: {torch.cuda.device_count()}'
     logging.info(msg)
-    hvd_print_worker(f'Using {device}')
+    print_worker(f'Using {device}')
     log_delimiter()
 
 

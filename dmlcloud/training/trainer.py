@@ -4,17 +4,16 @@ import sys
 from contextlib import nullcontext
 from datetime import datetime, timedelta
 
-import horovod.torch as hvd
 import numpy as np
 import torch
+import torch.distributed as dist
 import wandb
 from progress_table import ProgressTable
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import ChainedScheduler, LinearLR
 
 from dmlcloud.util import (
-    hvd_is_initialized,
-    hvd_print_worker,
+    print_worker,
     project_dir,
     script_path,
     setup_horovod,
@@ -121,7 +120,7 @@ class BaseTrainer(TrainerInterface):
 
     @property
     def is_root(self):
-        return hvd.rank() == 0
+        return dist.get_rank() == 0
 
     @property
     def is_train(self):
@@ -142,9 +141,6 @@ class BaseTrainer(TrainerInterface):
     def setup_all(self, use_checkpointing=True, use_wandb=True, print_diagnostics=True):
         if self.initialized:
             raise ValueError('Trainer already initialized! Call reset() first.')
-
-        if not hvd_is_initialized():
-            setup_horovod()
 
         self.seed()
         self.setup_general()
@@ -199,7 +195,7 @@ class BaseTrainer(TrainerInterface):
     def seed(self):
         if self.cfg.seed is None:
             seed = int.from_bytes(random.randbytes(4), byteorder='little')
-            self.cfg.seed = hvd.broadcast_object(seed)
+            self.cfg.seed = dist.broadcast_object_list([seed])[0]
 
         np.random.seed(self.cfg.seed)
         random.seed(self.cfg.seed)
@@ -222,13 +218,13 @@ class BaseTrainer(TrainerInterface):
 
     def setup_dataset(self):
         logging.info('Creating dataset')
-        hvd.barrier()
+        dist.barrier()
         ts = datetime.now()
         if self.is_root:
             self.train_dl, self.val_dl = self.create_dataset()
-            hvd.barrier()
+            dist.barrier()
         else:
-            hvd.barrier()  # wait until rank 0 has created the dataset (e.g. downloaded it)
+            dist.barrier()  # wait until rank 0 has created the dataset (e.g. downloaded it)
             self.train_dl, self.val_dl = self.create_dataset()
         logging.info(f'Dataset creation took {(datetime.now() - ts).total_seconds():.1f}s')
 
@@ -490,9 +486,9 @@ class BaseTrainer(TrainerInterface):
 
             if self.cfg.log_gradients:
                 norm = global_grad_norm(self.model.parameters())
-                self.log_metric('grad_norm', norm, allreduce=False, reduction='statistics')
+                #self.log_metric('grad_norm', norm, allreduce=False, reduction='statistics')
                 if self.cfg.clip_gradients:
-                    self.log_metric('grad_norm/n_clipped', norm > self.cfg.clip_gradients, hvd.Sum, allreduce=False)
+                    self.log_metric('grad_norm/n_clipped', norm > self.cfg.clip_gradients, dist.ReduceOp.SUM, allreduce=False)
 
             if self.cfg.clip_gradients:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.clip_gradients)
@@ -503,14 +499,12 @@ class BaseTrainer(TrainerInterface):
 
             if not torch.isnan(loss):  # mixed-precision might produce nan steps
                 self.log_metric('loss', loss)
-                self.misc_metrics.log_metric('n_nan', 0, hvd.Sum)
+                self.misc_metrics.log_metric('n_nan', 0, dist.ReduceOp.SUM)
             else:
-                self.misc_metrics.log_metric('n_nan', 1, hvd.Sum)
+                self.misc_metrics.log_metric('n_nan', 1, dist.ReduceOp.SUM)
 
-            self.misc_metrics.log_metric('n_steps', 1, hvd.Sum, allreduce=False)
-            self.misc_metrics.log_metric('n_total_batches', 1, hvd.Sum, allreduce=True)
-
-        hvd.join()  # prevents hangup on allreduce() due to uneven sharding
+            self.misc_metrics.log_metric('n_steps', 1, dist.ReduceOp.SUM, allreduce=False)
+            self.misc_metrics.log_metric('n_total_batches', 1, dist.ReduceOp.SUM, allreduce=True)
 
         self.misc_metrics.log_python_object('lr', self.scheduler.get_last_lr()[0])
         for k, v in self.scaler.state_dict().items():
@@ -562,12 +556,10 @@ class BaseTrainer(TrainerInterface):
                     loss = self.forward_step(batch_idx, batch).item()
                     self.log_metric('loss', loss)
 
-        hvd.join()  # prevents hangup on allreduce() due to uneven sharding
-
         self.post_eval()
 
     def pre_training(self):
-        hvd_print_worker('READY')
+        print_worker('READY')
         self.start_time = datetime.now()
         logging.info('Starting training...')
 
@@ -588,7 +580,7 @@ class BaseTrainer(TrainerInterface):
             self.evaluate_epoch(max_steps)
         self.post_training()
 
-    def log_metric(self, name, value, reduction=hvd.Average, allreduce=True):
+    def log_metric(self, name, value, reduction='avg', allreduce=True):
         self.current_metrics.log_metric(name, value, reduction, allreduce)
 
     def log_python_object(self, name, value):

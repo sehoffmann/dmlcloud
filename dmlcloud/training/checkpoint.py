@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime
 
-import horovod.torch as hvd
+import torch.distributed as dist
 from wandb.sdk.lib.runid import generate_id
 
 from dmlcloud.config import DefaultConfig
@@ -71,14 +71,14 @@ def generate_job_id():
 
 
 def create_project_dir(base_dir, config):
-    job_id = hvd.broadcast_object(generate_job_id(), name='job_id')
+    job_id = dist.broadcast_object([generate_job_id()])[0]
     dir_name = job_id
     if config.name:
         dir_name += ' ' + sanitize_filename(config.name)
 
-    model_dir = hvd.broadcast_object(base_dir / dir_name, name='model_dir')
+    model_dir = dist.broadcast_object([base_dir / dir_name])[0]
 
-    if hvd.rank() == 0:
+    if dist.rank() == 0:
         os.makedirs(model_dir)
         save_config(get_config_path(model_dir), config)
 

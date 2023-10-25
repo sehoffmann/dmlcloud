@@ -1,24 +1,19 @@
-import horovod.torch as hvd
+import torch.distributed as dist
 
 
-def scale_lr(lr, per_worker_batch_size, base_batch_size, use_adasum, use_gpu):
-    if use_adasum and hvd.nccl_built() and use_gpu:
-        lr_scaling = hvd.local_size()  # gpu adasum needs scaling by local size
-    elif use_adasum:
-        lr_scaling = 1.0  # cpu adasum doesn't need per_batch_scaling
-    else:
-        lr_scaling = hvd.size()
+def scale_lr(lr, per_worker_batch_size, base_batch_size):
+    lr_scaling = dist.get_world_size()
     lr_scaling *= per_worker_batch_size / base_batch_size
     return lr * lr_scaling, lr_scaling
 
 
 def scale_beta1(beta1, per_worker_batch_size, base_batch_size):
-    factor = hvd.size() * per_worker_batch_size / base_batch_size
+    factor = dist.get_world_size() * per_worker_batch_size / base_batch_size
     return beta1**factor
 
 
 def scale_beta2(beta2, per_worker_batch_size, base_batch_size):
-    factor = hvd.size() * per_worker_batch_size / base_batch_size
+    factor = dist.get_world_size() * per_worker_batch_size / base_batch_size
     return beta2**factor
 
 
