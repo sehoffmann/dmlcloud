@@ -16,7 +16,6 @@ from dmlcloud.util import (
     print_worker,
     project_dir,
     script_path,
-    setup_horovod,
     wandb_is_initialized,
     wandb_set_startup_timeout,
 )
@@ -141,6 +140,9 @@ class BaseTrainer(TrainerInterface):
     def setup_all(self, use_checkpointing=True, use_wandb=True, print_diagnostics=True):
         if self.initialized:
             raise ValueError('Trainer already initialized! Call reset() first.')
+
+        if not dist.is_initialized():
+            raise ValueError('Default process group not initialized! Call torch.distributed.init_process_group() first.')
 
         self.seed()
         self.setup_general()
