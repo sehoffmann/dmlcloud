@@ -15,6 +15,9 @@ def setup_logging():
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO if hvd.rank() == 0 else logging.WARNING)
 
+    if root_logger.hasHandlers():
+        return
+
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.DEBUG)
     stdout_handler.setFormatter(logging.Formatter())
