@@ -75,8 +75,8 @@ def log_config(config):
 
 
 def log_git():
-    msg = f'Git Hash: {git_hash()}\n'
-    msg += f'Git Diff:\n{git_diff()}\n'
+    msg = f'Git Hash: {git_hash() or "N/A"}\n' 
+    msg += f'Git Diff:\n{git_diff() or "N/A"}\n'
     msg += delimiter()
     logging.info(msg)
 

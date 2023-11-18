@@ -176,8 +176,8 @@ class BaseTrainer(TrainerInterface):
 
     def print_diagnositcs(self):
         log_delimiter()
-        logging.info(f'Script path: {script_path()}')
-        logging.info(f'Project dir: {project_dir()}')
+        logging.info(f'Script path: {script_path() or "N/A"}')
+        logging.info(f'Project dir: {project_dir() or "N/A"}')
         log_git()
         log_diagnostics(self.device)
 
