@@ -9,27 +9,6 @@ from wandb.sdk.lib.runid import generate_id
 from dmlcloud.config import DefaultConfig
 
 
-class ExtendedJSONEncoder(json.JSONEncoder):
-    """
-    JSONEncoder subclass that serializes classes and functions as well (by their name).
-    """
-
-    def default(self, o):
-        if isinstance(o, type):
-            return f'<cls {o.__module__}.{o.__name__}>'
-        elif callable(o):
-            return f'<fn {o.__module__}.{o.__name__}>'
-
-        try:
-            return super().default(o)
-        except TypeError:
-            return str(o)
-
-
-class ExtendedJSONDecoder(json.JSONDecoder):
-    pass
-
-
 def get_config_path(model_dir):
     return model_dir / 'config.json'
 
@@ -115,11 +94,8 @@ def consistency_check(parsed_dct, config):
 
 
 def save_config(path, config):
-    with open(path, 'w') as file:
-        json.dump(config.as_dictionary(), file, cls=ExtendedJSONEncoder, indent=4)
+    pass
 
 
 def load_config_dct(path):
-    with open(path) as file:
-        dct = json.load(file, cls=ExtendedJSONDecoder)
-        return dct
+    pass

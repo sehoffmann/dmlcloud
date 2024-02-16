@@ -12,19 +12,12 @@ from progress_table import ProgressTable
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import ChainedScheduler, LinearLR
 
-from dmlcloud.util import (
-    print_worker,
-    project_dir,
-    script_path,
-    wandb_is_initialized,
-    wandb_set_startup_timeout,
-)
+from dmlcloud.util import print_worker, project_dir, script_path, wandb_is_initialized, wandb_set_startup_timeout
 from .checkpoint import resume_project_dir
-from .metrics import MetricSaver
+from dmcloud.metrics import MetricTracker
 from .scaling import scale_lr, scale_param_group
 from .util import (
     git_hash,
-    global_grad_norm,
     log_config,
     log_delimiter,
     log_diagnostics,
@@ -34,80 +27,31 @@ from .util import (
 )
 
 
-class TrainerInterface:
-    """
-    These methods must be implemented for each experiment
-    """
-
-    def create_loss(self):
-        """
-        Returns a loss function.
-        Will be available as self.loss_fn.
-        """
-        return None
-
-    def create_dataset(self):
-        """
-        Returns a tuple of (train_dl, val_dl).
-        Will be available as self.train_dl and self.val_dl.
-        These shall be iterators that yield batches.
-        """
-        raise NotImplementedError()
-
-    def create_model(self):
-        """
-        Returns a torch.nn.Module.
-        Will be available as self.model.
-        If you need multiple networks, e.g. for GANs, wrap them in a nn.Module.
-        """
-        raise NotImplementedError()
-
-    def create_optimizer(self, params, lr):
-        """
-        Returns an optimizer.
-        Will be available as self.optimizer.
-        """
-        raise NotImplementedError()
-
-    def create_scheduler(self):
-        """
-        Returns a scheduler or None.
-        """
-        return None
-
-    def forward_step(self, batch_idx, batch):
-        """
-        Performs a forward pass and returns the loss.
-        """
-        raise NotImplementedError()
 
 
-class BaseTrainer(TrainerInterface):
-    @staticmethod
-    def root_only(fn):
-        """
-        Decorator for methods that should only be called on the root rank.
-        """
+class BaseTrainer:
 
-        def wrapper(self, *args, **kwargs):
-            if self.is_root:
-                return fn(self, *args, **kwargs)
-
-        return wrapper
-
-    def __init__(self, config, val_loss_name='loss'):
+    def __init__(self, config):
         self.cfg = config
-        self.val_loss_name = val_loss_name
-        self.reset()
 
-    def reset(self):
         self.initialized = False
         self.is_resumed = False
-        self.train_metrics = MetricSaver()
-        self.val_metrics = MetricSaver()
-        self.misc_metrics = MetricSaver()
+        self.tracker = MetricTracker()
         self.epoch = 1
         self.mode = 'train'
+
+
+    def register_model(self, name, model, use_ddp=True):
+        if use_ddp:
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[self.device], broadcast_buffers=False
+            )
+        self.models[name] = model
+
+
+    def register_optimizer(self, name, optimizer):
+        self.optimizers[name] = optimizer
+
 
     @property
     def use_checkpointing(self):
@@ -116,18 +60,6 @@ class BaseTrainer(TrainerInterface):
     @property
     def is_gpu(self):
         return self.device.type == 'cuda'
-
-    @property
-    def is_root(self):
-        return dist.get_rank() == 0
-
-    @property
-    def is_train(self):
-        return self.mode == 'train'
-
-    @property
-    def is_eval(self):
-        return not self.is_train
 
     @property
     def model_dir(self):
@@ -142,7 +74,9 @@ class BaseTrainer(TrainerInterface):
             raise ValueError('Trainer already initialized! Call reset() first.')
 
         if not dist.is_initialized():
-            raise ValueError('Default process group not initialized! Call torch.distributed.init_process_group() first.')
+            raise ValueError(
+                'Default process group not initialized! Call torch.distributed.init_process_group() first.'
+            )
 
         self.seed()
         self.setup_general()
@@ -166,9 +100,6 @@ class BaseTrainer(TrainerInterface):
             log_config(self.cfg)
 
         self.setup_table()
-
-        hvd.broadcast_parameters(self.model.state_dict(), root_rank=0)
-        hvd.broadcast_optimizer_state(self.optimizer, root_rank=0)
 
         self.initialized = True
 
@@ -233,7 +164,7 @@ class BaseTrainer(TrainerInterface):
         if hasattr(self.train_dl, 'dataset') and hasattr(self.train_dl.dataset, '__len__'):
             train_samples = f'{len(self.train_dl.dataset)}'
         else:
-            train_samples = 'N/A'        
+            train_samples = 'N/A'
         train_sizes = hvd.allgather(torch.tensor([len(self.train_dl)]), name='train_dataset_size')
         train_sizes = [t.item() for t in train_sizes]
         msg = 'Train dataset:'
@@ -249,8 +180,8 @@ class BaseTrainer(TrainerInterface):
             if hasattr(self.val_dl, 'dataset') and hasattr(self.val_dl.dataset, '__len__'):
                 val_samples = f'{len(self.val_dl.dataset)}'
             else:
-                val_samples = 'N/A'        
-        
+                val_samples = 'N/A'
+
             val_sizes = hvd.allgather(torch.tensor([len(self.val_dl)]), name='val_dataset_size')
             val_sizes = [t.item() for t in val_sizes]
             msg = 'Train dataset:'
@@ -266,7 +197,9 @@ class BaseTrainer(TrainerInterface):
 
     def setup_model(self):
         logging.info('Creating model')
-        self.model = self.create_model().to(self.device)
+
+        model = self.create_model().to(self.device)
+        self.model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[self.device], broadcast_buffers=False)
         log_model(self.model)
         if self.is_root and self.use_checkpointing:
             with open(self.model_dir / 'model.txt', 'w') as f:
@@ -488,9 +421,11 @@ class BaseTrainer(TrainerInterface):
 
             if self.cfg.log_gradients:
                 norm = global_grad_norm(self.model.parameters())
-                #self.log_metric('grad_norm', norm, allreduce=False, reduction='statistics')
+                # self.log_metric('grad_norm', norm, allreduce=False, reduction='statistics')
                 if self.cfg.clip_gradients:
-                    self.log_metric('grad_norm/n_clipped', norm > self.cfg.clip_gradients, dist.ReduceOp.SUM, allreduce=False)
+                    self.log_metric(
+                        'grad_norm/n_clipped', norm > self.cfg.clip_gradients, dist.ReduceOp.SUM, allreduce=False
+                    )
 
             if self.cfg.clip_gradients:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.clip_gradients)

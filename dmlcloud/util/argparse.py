@@ -1,17 +1,5 @@
 import argparse
 import enum
-import os
-
-import wandb
-
-
-def set_wandb_startup_timeout(seconds: int):
-    assert isinstance(seconds, int)
-    os.environ['WANDB__SERVICE_WAIT'] = f'{seconds}'
-
-
-def is_wandb_initialized():
-    return wandb.run is not None
 
 
 class EnumAction(argparse.Action):
