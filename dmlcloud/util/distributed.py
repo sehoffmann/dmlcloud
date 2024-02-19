@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import torch.distributed as dist
 
@@ -18,6 +20,32 @@ def root_only(fn):
             return fn(self, *args, **kwargs)
 
     return wrapper
+
+def mpi_local_comm():
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    local_comm = comm.split_type(MPI.COMM_TYPE_SHARED, 0, MPI.INFO_NULL)
+    return local_comm
+
+
+def local_rank():
+    if 'LOCAL_RANK' in os.environ:
+        return int(os.environ["LOCAL_RANK"])
+    try:
+        return mpi_local_comm().get_rank()
+    except:
+        pass
+    raise ValueError('Can not determine local rank')
+    
+
+def local_size():
+    if 'LOCAL_WORLD_SIZE' in os.environ:
+        return int(os.environ["LOCAL_WORLD_SIZE"])
+    try:
+        return mpi_local_comm().get_size()
+    except:
+        pass
+    raise ValueError('Can not determine local world size')
 
 
 def print_worker(msg, barrier=True, flush=True):
