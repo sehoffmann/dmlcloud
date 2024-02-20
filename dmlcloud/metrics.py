@@ -119,10 +119,10 @@ class MetricReducer:
         tensor = self.reduce_locally()
         if self.globally:
             if self.reduction == Reduction.MEAN:
-                tensor = dist.all_reduce(tensor, op=dist.ReduceOp.SUM, group=group, async_op=async_op)
+                dist.all_reduce(tensor, op=dist.ReduceOp.SUM, group=group, async_op=async_op)
                 tensor /= dist.get_world_size(group)
             else:
-                tensor = dist.all_reduce(tensor, op=self.reduction.as_torch(), group=group, async_op=async_op)
+                dist.all_reduce(tensor, op=self.reduction.as_torch(), group=group, async_op=async_op)
         return tensor
         
     def state_dict(self):
@@ -215,6 +215,9 @@ class MetricTracker:
             self.reducers[name] = MetricReducer(reduction=reduction, dim=dim, globally=globally)
 
     def track(self, name, value):
+        if isinstance(value, torch.Tensor):
+            value = value.detach().cpu()
+
         if name not in self:
             raise ValueError(f'Metric {name} does not exist')
 

@@ -1,6 +1,9 @@
 import sys
+sys.path.insert(0, './')
+
 import torch
 import pytest
+
 
 from dmlcloud.metrics import MetricTracker, Reduction, MetricReducer
 
@@ -26,6 +29,32 @@ class TestMetricReducer:
         reducer.reduction = Reduction.MEAN
         assert reducer.reduce_locally().item() == 2
         assert reducer.reduce_globally().item() == 2
+
+    
+    def test_global_reduction(self):
+        import torch.distributed as dist
+        dist.init_process_group(init_method='tcp://localhost:12345', rank=0, world_size=1)
+
+        reducer = MetricReducer(reduction=Reduction.MIN, globally=True)
+        reducer.append(torch.tensor([1, 2, 3], dtype=torch.float))
+        reducer.append(torch.tensor([-1, -2, -3], dtype=torch.float))
+        reducer.append(torch.tensor([1,7,10], dtype=torch.float))
+        
+        assert reducer.reduce_locally().item() == -3
+        assert reducer.reduce_globally().item() == -3
+
+        reducer.reduction = Reduction.MAX
+        assert reducer.reduce_locally().item() == 10
+        assert reducer.reduce_globally().item() == 10
+
+        reducer.reduction = Reduction.SUM
+        assert reducer.reduce_locally().item() == 18
+        assert reducer.reduce_globally().item() == 18
+
+        reducer.reduction = Reduction.MEAN
+        assert reducer.reduce_locally().item() == 2
+        assert reducer.reduce_globally().item() == 2
+
 
     def test_partial_reduction(self):
         tensor = torch.tensor([
