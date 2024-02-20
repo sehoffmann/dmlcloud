@@ -4,7 +4,7 @@ from progress_table import ProgressTable
 import torch
 
 from .metrics import MetricTracker, Reduction
-
+from .util.distributed import root_only, is_root
 
 class StopStageException(Exception):
     pass
@@ -38,6 +38,7 @@ class Stage:
     @property
     def logger(self):
         return self.pipeline.logger
+
 
     def track_reduce(self, 
         name: str,
@@ -145,7 +146,8 @@ class Stage:
 
     def _post_stage(self):
         self.stop_time = datetime.now()
-        self.table.close()
+        if is_root():
+            self.table.close()
         if len(self.pipeline.stages) > 1:
             self.logger.info(f'Finished stage in {self.stop_time - self.start_time}')
         self.post_stage()
@@ -163,13 +165,14 @@ class Stage:
         self.tracker.next_epoch()
         pass    
 
+    @root_only
     def _setup_table(self):
         for column_dct in self._metrics():
             display_name = column_dct.pop('name')
             column_dct.pop('metric')
             self.table.add_column(display_name, **column_dct)
 
-
+    @root_only
     def _update_table(self):
         self.table.update('Epoch', self.current_epoch)
         self.table.update('Time/Epoch', (datetime.now() - self.start_time) / self.current_epoch)

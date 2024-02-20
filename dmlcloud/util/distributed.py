@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 
 import numpy as np
 import torch.distributed as dist
@@ -6,7 +7,7 @@ import torch.distributed as dist
 from .tcp import find_free_port, get_local_ips
 
 
-def is_root_rank():
+def is_root():
     return dist.get_rank() == 0
 
 
@@ -14,38 +15,57 @@ def root_only(fn):
     """
     Decorator for methods that should only be called on the root rank.
     """
-
-    def wrapper(self, *args, **kwargs):
-        if self.is_root_rank:
-            return fn(self, *args, **kwargs)
-
+    def wrapper(*args, **kwargs):
+        if is_root():
+            return fn(*args, **kwargs)
     return wrapper
 
+
+@contextmanager
+def root_first():
+    """
+    Context manager that ensures that the root rank executes the code first before all other ranks
+    """
+    if is_root():
+        try:
+            yield
+        finally:
+            dist.barrier()
+    else:
+        dist.barrier()
+        try:
+            yield
+        finally:
+            pass
+
 def mpi_local_comm():
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    local_comm = comm.split_type(MPI.COMM_TYPE_SHARED, 0, MPI.INFO_NULL)
-    return local_comm
+    try:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        local_comm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0, MPI.INFO_NULL)  
+        return local_comm
+    except ImportError:
+        return None
 
 
 def local_rank():
     if 'LOCAL_RANK' in os.environ:
         return int(os.environ["LOCAL_RANK"])
-    try:
-        return mpi_local_comm().get_rank()
-    except:
-        pass
-    raise ValueError('Can not determine local rank')
+    local_comm = mpi_local_comm()
+    if local_comm is not None:
+        return local_comm.Get_rank()
+    else:
+        return None
     
 
 def local_size():
     if 'LOCAL_WORLD_SIZE' in os.environ:
         return int(os.environ["LOCAL_WORLD_SIZE"])
-    try:
-        return mpi_local_comm().get_size()
-    except:
-        pass
-    raise ValueError('Can not determine local world size')
+    local_comm = mpi_local_comm()
+    if local_comm is not None:
+        return local_comm.Get_size()
+    else:
+        return None
 
 
 def print_worker(msg, barrier=True, flush=True):
@@ -68,7 +88,17 @@ def shard_indices(n, rank, size, shuffle=True, drop_remainder=False, seed=0):
     return indices[rank::size]
 
 
-def init_MPI_process_group(ip_idx=0, port=None, verbose=False, **kwargs):
+def init_process_group_dummy():
+    """
+    Initializes the process group with a single process. 
+    Uses HashStore under the hood. Useful for applications that
+    only run on a single gpu.
+    """
+    store = dist.HashStore()
+    dist.init_process_group(store=store, rank=0, world_size=1)
+
+
+def init_process_group_MPI(ip_idx=0, port=None, **kwargs):
     """
     This method setups up the distributed backend using MPI, even
     if torch was not built with MPI support. For this to work, you
@@ -99,8 +129,6 @@ def init_MPI_process_group(ip_idx=0, port=None, verbose=False, **kwargs):
     port = comm.bcast(port, root=0)
     url = f'tcp://{ip}:{port}'
 
-    if verbose and rank == 0:
-        print(f'Initializing torch.distributed using url {url}', flush=True)
     comm.Barrier()
 
     dist.init_process_group(
@@ -111,3 +139,31 @@ def init_MPI_process_group(ip_idx=0, port=None, verbose=False, **kwargs):
     )
 
     return rank, size
+
+
+def init_process_group_auto(ip_idx=0, port=None, **kwargs):
+    """
+    Tries to initialize torch.distributed in the following order:
+    1. If the MASTER_PORT environment variable is set, use environment variable initialization
+    2. If a MPI context is available, e.g. from slurm or mpirun, use MPI to exchange ip addresses (see init_process_group_MPI)
+    3. Otherwise, use a single process group (see init_process_group_dummy)
+    """
+
+    # determine init method
+    method = 'dummy'
+    if os.environ.get('MASTER_PORT'):
+        method = 'env'
+    else:
+        try:
+            from mpi4py import MPI
+            if MPI.COMM_WORLD.Get_size() > 1:
+                method = 'MPI'
+        except ImportError:
+            pass
+    
+    if method == 'env':
+        dist.init_process_group(init_method='env://', **kwargs)
+    elif method == 'MPI':
+        init_process_group_MPI(ip_idx=ip_idx, port=port, **kwargs)
+    else:
+        init_process_group_dummy()

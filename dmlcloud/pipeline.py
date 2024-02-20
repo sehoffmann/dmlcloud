@@ -9,6 +9,7 @@ from omegaconf import OmegaConf
 
 from .stage import Stage
 from .metrics import MetricTracker, Reduction
+from .util.distributed import local_rank
 
 
 class TrainingPipeline:
@@ -107,7 +108,14 @@ class TrainingPipeline:
                 'Default process group not initialized! Call torch.distributed.init_process_group() first.'
             )
 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if torch.cuda.is_available():
+            if local_rank() is None:
+                self.device = torch.device('cuda')
+            else:
+                self.device = torch.device('cuda', local_rank())
+        else:
+            self.device = torch.device('cpu')
+
         self.start_time = datetime.now()
         self.pre_run()
 

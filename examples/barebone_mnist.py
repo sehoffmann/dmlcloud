@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 
 from dmlcloud.pipeline import TrainingPipeline
 from dmlcloud.stage import Stage
+from dmlcloud.util.distributed import init_process_group_auto, is_root, root_first
 
 
 class MNISTStage(Stage):
@@ -20,11 +21,14 @@ class MNISTStage(Stage):
             transforms.Normalize((0.1307,), (0.3081,))
         ])
 
-        train_dataset = datasets.MNIST(root='data', train=True, download=True, transform=transform)
-        self.train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+        with root_first():
+            train_dataset = datasets.MNIST(root='data', train=True, download=is_root(), transform=transform)
+            self.train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+            self.train_loader = DataLoader(train_dataset, batch_size=32, sampler=self.train_sampler)
 
-        val_dataset = datasets.MNIST(root='data', train=False, download=True, transform=transform)
-        self.val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+            val_dataset = datasets.MNIST(root='data', train=False, download=is_root(), transform=transform)
+            val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
+            self.val_loader = DataLoader(val_dataset, batch_size=32, sampler=val_sampler)
 
         self.model = nn.Sequential(
             nn.Conv2d(1, 16, 3, padding=1),
@@ -45,40 +49,54 @@ class MNISTStage(Stage):
         self.track_reduce('accuracy', (output.argmax(1) == target).float().mean())
 
 
-    def run_epoch(self):
+    def _train_epoch(self):
         self.model.train()
         self.metric_prefix = 'train'
+        self.train_sampler.set_epoch(self.current_epoch)
+
         for img, target in self.train_loader:
             img, target = img.to(self.pipeline.device), target.to(self.pipeline.device)
+
             self.optimizer.zero_grad()
             output = self.model(img)
             loss = self.loss(output, target)
-            self._log_metrics(img, target, output, loss)
             loss.backward()
             self.optimizer.step()
 
+            self._log_metrics(img, target, output, loss)
+
+
+    @torch.no_grad()
+    def _val_epoch(self):
         self.model.eval()
         self.metric_prefix = 'val'
+
         for img, target in self.val_loader:
             img, target = img.to(self.pipeline.device), target.to(self.pipeline.device)
-            with torch.no_grad():
-                output = self.model(img)
-                loss = self.loss(output, target)
-                self._log_metrics(img, target, output, loss)
+
+            output = self.model(img)
+            loss = self.loss(output, target)
+
+            self._log_metrics(img, target, output, loss)
+
+
+    def run_epoch(self):
+        self._train_epoch()
+        self._val_epoch()        
 
 
     def table_columns(self):
         columns = super().table_columns()
         columns.insert(1, {'name': '[Train] Loss', 'metric': 'train/loss'})
-        columns.insert(2, {'name': '[Train] Acc.', 'metric': 'train/accuracy'})
-        columns.insert(3, {'name': '[Val] Loss', 'metric': 'val/loss'})
+        columns.insert(2, {'name': '[Val] Loss', 'metric': 'val/loss'})
+        columns.insert(3, {'name': '[Train] Acc.', 'metric': 'train/accuracy'})
         columns.insert(4, {'name': '[Val] Acc.', 'metric': 'val/accuracy'})
         return columns
 
 
 
 def main():
-    dist.init_process_group(init_method='tcp://localhost:23456', rank=0, world_size=1)
+    init_process_group_auto()
 
     pipeline = TrainingPipeline({})
     pipeline.append_stage(MNISTStage(), max_epochs=10)
