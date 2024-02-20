@@ -1,15 +1,17 @@
 import logging
-from typing import Optional, Union, Dict, List
+from typing import Optional, Union, Dict, List, Sequence
 from datetime import datetime
 
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
+from torch.utils.data import DataLoader, Dataset
 from omegaconf import OmegaConf
 
 from .stage import Stage
 from .metrics import MetricTracker, Reduction
 from .util.distributed import local_rank
+from .util.logging import add_log_handlers, general_diagnostics
 
 
 class TrainingPipeline:
@@ -25,35 +27,59 @@ class TrainingPipeline:
         self.logger = logging.getLogger('dmlcloud')
         self.tracker = MetricTracker()
         self.device = None
-        self.stages = []
         self.start_time = None
         self.stop_time = None
 
-    def register_model(self, name, model, use_ddp=True):
+        self.stages = []
+        self.datasets = {}
+        self.models = {}
+        self.optimizers = {}
+        self.schedulers = {}
+
+
+    def register_model(self, name, model, use_ddp=True, verbose=True):
+        if name in self.models:
+            raise ValueError(
+                f'Model with name {name} already exists'
+            )
         if use_ddp:
             model = DistributedDataParallel(
-                model, device_ids=[self.device], broadcast_buffers=False
+                model, broadcast_buffers=False
             )
+        model = model.to(self.device)
         self.models[name] = model
 
-    def register_optimizer(self, name : str, optimizer):
-        self.optimizers[name] = optimizer
+        if verbose:
+            msg = f'Model "{name}":\n'
+            msg += f'  - Parameters: {sum(p.numel() for p in model.parameters())/1e6:.1f} kk\n'
+            msg += f'  - DDP: {use_ddp}\n'
+            msg += f'  - {model}'
+            self.logger.info(msg)
 
-    def init_wandb(self):
-        '''
-        wandb_set_startup_timeout(600)
-        exp_name = self.cfg.wb_name if self.cfg.wb_name else self.cfg.name
-        wandb.init(
-            project=self.cfg.wb_project,
-            name=exp_name,
-            tags=self.cfg.wb_tags,
-            dir=self.model_dir,
-            id=self.job_id,
-            resume='must' if self.is_resumed else 'never',
-            config=self.cfg.as_dictionary(),
-        )
-        '''
-        pass
+
+    def register_optimizer(self, name: str, optimizer, scheduler=None):
+        if name in self.optimizers:
+            raise ValueError(
+                f'Optimizer with name {name} already exists'
+            )
+        self.optimizers[name] = optimizer
+        if scheduler is not None:
+            self.schedulers[name] = scheduler
+
+
+    def register_dataset(self, name: str, dataset: Union[DataLoader, Dataset, Sequence], verbose: bool = True):
+        if name in self.datasets:
+            raise ValueError(
+                f'Dataset with name {name} already exists'
+            )
+
+        self.datasets[name] = dataset
+        if verbose:
+            msg = f'Dataset "{name}":\n'
+            msg += f'  - Batches (/Worker): {len(dataset)}\n'
+            msg += f'  - Batches (Total): ~{len(dataset) * dist.get_world_size()}\n'
+            self.logger.info(msg)
+
 
     def append_stage(self, stage: Stage, max_epochs : Optional[int] =None, name : Optional[str]=None):
         if not isinstance(stage, Stage):
@@ -99,6 +125,7 @@ class TrainingPipeline:
     def post_run(self):
         pass
 
+
     def _pre_run(self):
         if len(self.stages) == 0:
             raise ValueError('No stages defined. Use append_stage() to add stages to the pipeline.')
@@ -117,11 +144,16 @@ class TrainingPipeline:
             self.device = torch.device('cpu')
 
         self.start_time = datetime.now()
+
+        add_log_handlers(self.logger)
+        self.logger.info(general_diagnostics())
+        self.logger.info('* CONFIG:\n' + OmegaConf.to_yaml(self.cfg))
+        
         self.pre_run()
 
     def _post_run(self):
         self.stop_time = datetime.now()
-        self.logger.info(f'Finished pipeline in {self.stop_time - self.start_time}')
+        self.logger.info(f'Finished training in {self.stop_time - self.start_time}')
         self.post_run()
 
     def run(self):

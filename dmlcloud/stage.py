@@ -35,9 +35,15 @@ class Stage:
     def tracker(self) -> MetricTracker:
         return self.pipeline.tracker
 
+
     @property
     def logger(self):
         return self.pipeline.logger
+    
+
+    @property
+    def device(self):
+        return self.pipeline.device
 
 
     def track_reduce(self, 
@@ -205,29 +211,71 @@ class Stage:
     
 class TrainValStage(Stage):
 
+    def __init__(self):
+        super().__init__()
+        self.is_train = True
 
-    def __init__(self, train_loader, val_loader):
-        self.train_loader = train_loader
-        self.val_loader = val_loader
 
     def run_epoch(self):
         self.train_epoch()
         self.val_epoch()
 
+
     def step(self, batch) -> torch.Tensor:
         raise NotImplementedError()
 
+
     def train_step(self, batch):
-        self.step(batch)
+        return self.step(batch)
+
 
     def val_step(self, batch):
-        self.step(batch)
+        return self.step(batch)
+
 
     def train_epoch(self):
-        for batch in self.train_loader:
-            self.step(batch)
+        self.is_train = True
+        self.metric_prefix = 'train'
+        
+        train_ds = self.pipeline.datasets.get('train')
+        if train_ds is None:
+            raise ValueError('No "train" dataset found in pipeline. Use register_dataset("train", ...) to register a dataset.')
+
+        if hasattr(train_ds, 'sampler') and hasattr(train_ds.sampler, 'set_epoch'):
+            train_ds.sampler.set_epoch(self.current_epoch)
+
+        for batch in train_ds:
+            for optimizer in self.pipeline.optimizers.values():
+                optimizer.zero_grad()
+            
+            loss = self.train_step(batch)
+            loss.backward()
+
+            for optimizer in self.pipeline.optimizers.values():
+                optimizer.step()
+
+            self.track_reduce('loss', loss)
+
+        for scheduler in self.pipeline.schedulers.values():
+            scheduler.step()
+
 
     @torch.no_grad()
     def val_epoch(self):
-        for batch in self.train_loader:
-            self.step(batch)
+        self.is_train = False
+        self.metric_prefix = 'val'
+        
+        val_ds = self.pipeline.datasets.get('val')
+        if val_ds is None:
+            raise ValueError('No "val" dataset found in pipeline. Use register_dataset("val", ...) to register a dataset.')
+        
+        for batch in val_ds:
+            loss = self.val_step(batch)
+            self.track_reduce('loss', loss)
+
+    
+    def table_columns(self):
+        columns = super().table_columns()
+        columns.insert(1, {'name': '[Train] Loss', 'metric': 'train/loss'})
+        columns.insert(2, {'name': '[Val] Loss', 'metric': 'val/loss'})
+        return columns

@@ -44,9 +44,9 @@ class MNISTStage(Stage):
         self.loss = nn.CrossEntropyLoss()
 
 
-    def _log_metrics(self, img, target, output, loss):
-        self.track_reduce('loss', loss)
-        self.track_reduce('accuracy', (output.argmax(1) == target).float().mean())
+    def run_epoch(self):
+        self._train_epoch()
+        self._val_epoch()      
 
 
     def _train_epoch(self):
@@ -80,9 +80,9 @@ class MNISTStage(Stage):
             self._log_metrics(img, target, output, loss)
 
 
-    def run_epoch(self):
-        self._train_epoch()
-        self._val_epoch()        
+    def _log_metrics(self, img, target, output, loss):
+        self.track_reduce('loss', loss)
+        self.track_reduce('accuracy', (output.argmax(1) == target).float().mean())
 
 
     def table_columns(self):
@@ -98,8 +98,8 @@ class MNISTStage(Stage):
 def main():
     init_process_group_auto()
 
-    pipeline = TrainingPipeline({})
-    pipeline.append_stage(MNISTStage(), max_epochs=10)
+    pipeline = TrainingPipeline()
+    pipeline.append_stage(MNISTStage(), max_epochs=3)
     pipeline.run()
 
 

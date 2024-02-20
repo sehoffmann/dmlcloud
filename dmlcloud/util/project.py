@@ -69,7 +69,7 @@ def project_dir():
     return cur_dir
 
 
-def run_in_project(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs):
+def run_in_project(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs):
     """
     Runs a command in the project directory and returns the output.
     """
