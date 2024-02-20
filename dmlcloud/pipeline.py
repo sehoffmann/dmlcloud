@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, List
 from datetime import datetime
 
 import torch
@@ -8,7 +8,7 @@ from torch.nn.parallel import DistributedDataParallel
 from omegaconf import OmegaConf
 
 from .stage import Stage
-from .metrics import MetricTracker
+from .metrics import MetricTracker, Reduction
 
 
 class TrainingPipeline:
@@ -64,6 +64,33 @@ class TrainingPipeline:
         stage.max_epochs = max_epochs
         stage.name = name
         self.stages.append(stage)
+
+
+    def track_reduce(self, 
+        name: str,
+        value: torch.Tensor,
+        step: Optional[int] = None,
+        reduction: Reduction = Reduction.MEAN,
+        dim: Optional[List[int]] = None,
+        reduce_globally: bool = True,
+    ):
+        if name not in self.tracker:
+            self.tracker.register_metric(name, reduction, dim, reduce_globally)
+
+        self.tracker.track(name, value)
+
+
+    def track(
+        self,
+        name: str,
+        value,
+        step: Optional[int] = None,
+    ):
+        if name not in self.tracker:
+            self.tracker.register_metric(name)
+
+        self.tracker.track(name, value)
+
 
     def pre_run(self):
         pass

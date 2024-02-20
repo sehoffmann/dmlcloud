@@ -1,10 +1,9 @@
-import logging
-from typing import Any, Dict, List, Union 
+from typing import Any, Dict, List, Union, Optional
 from datetime import datetime
 from progress_table import ProgressTable
 import torch
 
-from .metrics import MetricTracker
+from .metrics import MetricTracker, Reduction
 
 
 class StopStageException(Exception):
@@ -24,6 +23,7 @@ class Stage:
         self.pipeline = None  # set by the pipeline
         self.max_epochs = None  # set by the pipeline
         self.name = None  # set by the pipeline
+        self.metric_prefix = None
         self.start_time = None
         self.stop_time = None
         self.current_epoch = 1
@@ -38,6 +38,31 @@ class Stage:
     @property
     def logger(self):
         return self.pipeline.logger
+
+    def track_reduce(self, 
+        name: str,
+        value: torch.Tensor,
+        step: Optional[int] = None,
+        reduction: Reduction = Reduction.MEAN,
+        dim: Optional[List[int]] = None,
+        reduce_globally: bool = True,
+        prefixed: bool = True
+    ):
+        if prefixed and self.metric_prefix:
+            name = f'{self.metric_prefix}/{name}'
+        self.pipeline.track_reduce(name, value, step, reduction, dim, reduce_globally)
+
+
+    def track(
+        self,
+        name: str,
+        value,
+        step: Optional[int] = None,
+        prefixed: bool = True
+    ):
+        if prefixed and self.metric_prefix:
+            name = f'{self.metric_prefix}/{name}'
+        self.pipeline.track(name, value, step)
 
     def stop_stage(self):
         raise StopStageException()

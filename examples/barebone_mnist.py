@@ -40,22 +40,41 @@ class MNISTStage(Stage):
         self.loss = nn.CrossEntropyLoss()
 
 
+    def _log_metrics(self, img, target, output, loss):
+        self.track_reduce('loss', loss)
+        self.track_reduce('accuracy', (output.argmax(1) == target).float().mean())
+
+
     def run_epoch(self):
         self.model.train()
+        self.metric_prefix = 'train'
         for img, target in self.train_loader:
             img, target = img.to(self.pipeline.device), target.to(self.pipeline.device)
             self.optimizer.zero_grad()
             output = self.model(img)
             loss = self.loss(output, target)
+            self._log_metrics(img, target, output, loss)
             loss.backward()
             self.optimizer.step()
 
         self.model.eval()
-        for img, target in self.train_loader:
+        self.metric_prefix = 'val'
+        for img, target in self.val_loader:
             img, target = img.to(self.pipeline.device), target.to(self.pipeline.device)
             with torch.no_grad():
                 output = self.model(img)
                 loss = self.loss(output, target)
+                self._log_metrics(img, target, output, loss)
+
+
+    def table_columns(self):
+        columns = super().table_columns()
+        columns.insert(1, {'name': '[Train] Loss', 'metric': 'train/loss'})
+        columns.insert(2, {'name': '[Train] Acc.', 'metric': 'train/accuracy'})
+        columns.insert(3, {'name': '[Val] Loss', 'metric': 'val/loss'})
+        columns.insert(4, {'name': '[Val] Acc.', 'metric': 'val/accuracy'})
+        return columns
+
 
 
 def main():
