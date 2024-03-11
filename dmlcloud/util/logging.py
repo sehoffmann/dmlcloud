@@ -11,6 +11,70 @@ import torch.distributed as dist
 
 import dmlcloud
 from .git import git_hash
+from . import slurm
+from .thirdparty import try_get_version
+
+
+class IORedirector:
+    """
+    Context manager to redirect stdout and stderr to a file.
+    Data is written to the file and the original streams.
+    """
+
+    class Stdout:
+        def __init__(self, parent):
+            self.parent = parent
+        
+        def write(self, data):
+            self.parent.file.write(data)
+            self.parent.stdout.write(data)
+        
+        def flush(self):
+            self.parent.file.flush()
+            self.parent.stdout.flush()
+
+    class Stderr:
+        def __init__(self, parent):
+            self.parent = parent
+        
+        def write(self, data):
+            self.parent.file.write(data)
+            self.parent.stderr.write(data)
+        
+        def flush(self):
+            self.parent.file.flush()
+            self.parent.stderr.flush()
+
+
+    def __init__(self, log_file: Path):
+        self.path = log_file
+        self.file = None
+        self.stdout = None
+        self.stderr = None
+
+    def install(self):
+        if self.file is not None:
+            return
+
+        self.file = self.path.open('a')
+        self.stdout = sys.stdout
+        self.stderr = sys.stderr
+
+        sys.stdout = self.Stdout(self)
+        sys.stderr = self.Stderr(self)
+
+    def uninstall(self):
+        sys.stdout = self.stdout
+        sys.stderr = self.stderr
+        self.file.flush()
+        self.file.close()
+
+    def __enter__(self):
+        self.install()
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.uninstall()
 
 
 def add_log_handlers(logger: logging.Logger):
@@ -26,12 +90,19 @@ def add_log_handlers(logger: logging.Logger):
     stderr_handler.setFormatter(logging.Formatter())
     logger.addHandler(stderr_handler)
 
+def experiment_header(
+    name: str | None,
+    checkpoint_dir: str | None,
+    date: datetime,
+) -> str:
+    msg = f'...............  Experiment: {name if name else "N/A"}  ...............\n'
+    msg += f'- Date: {date}\n'
+    msg += f'- Checkpoint Dir: {checkpoint_dir if checkpoint_dir else "N/A"}\n'
+    msg += f'- Training on {dist.get_world_size()} GPUs\n'
+    return msg
 
-def general_diagnostics() -> str:
-    msg = f'Training on {dist.get_world_size()} GPUs\n'
-    msg += f'Date: {datetime.now()}\n\n'
-
-    msg += '* GENERAL:\n'
+def general_diagnostics() -> str:    
+    msg = '* GENERAL:\n'
     msg += f'      - argv: {sys.argv}\n'
     msg += f'      - cwd: {Path.cwd()}\n'
     
@@ -59,59 +130,27 @@ def general_diagnostics() -> str:
         pass
 
     msg += f'      - torch: {torch.__version__}\n'
-    
-    try:
-        import torchvision
-        msg += f'      - torchvision: {torchvision.__version__}\n'
-    except ImportError:
-        pass
-
-    try:
-        import torchtext
-        msg += f'      - torchtext: {torchtext.__version__}\n'
-    except ImportError:
-        pass
-
-    try:
-        import torchaudio
-        msg += f'      - torchaudio: {torchaudio.__version__}\n'
-    except ImportError:
-        pass
-
-    try:
-        import einops
-        msg += f'      - einops: {einops.__version__}\n'
-    except ImportError:
-        pass
-
-    try:
-        import numpy as np
-        msg += f'      - numpy: {np.__version__}\n'
-    except ImportError:
-        pass
-
-    try:
-        import pandas as pd
-        msg += f'      - pandas: {pd.__version__}\n'
-    except ImportError:
-        pass
-
-    try:
-        import xarray as xr
-        msg += f'      - xarray: {xr.__version__}\n'
-    except ImportError:
-        pass
-
-    try:
-        import sklearn
-        msg += f'      - sklearn: {sklearn.__version__}\n'
-    except ImportError:
-        pass
+    if try_get_version('torchvision'):
+        msg += f'      - torchvision: {try_get_version("torchvision")}\n'
+    if try_get_version('torchtext'):
+        msg += f'      - torchtext: {try_get_version("torchtext")}\n'
+    if try_get_version('torchaudio'):
+        msg += f'      - torchaudio: {try_get_version("torchaudio")}\n'
+    if try_get_version('einops'):
+        msg += f'      - einops: {try_get_version("einops")}\n'
+    if try_get_version('numpy'):
+        msg += f'      - numpy: {try_get_version("numpy")}\n'
+    if try_get_version('pandas'):
+        msg += f'      - pandas: {try_get_version("pandas")}\n'
+    if try_get_version('xarray'):
+        msg += f'      - xarray: {try_get_version("xarray")}\n'
+    if try_get_version('sklearn'):
+        msg += f'      - sklearn: {try_get_version("sklearn")}\n'
 
     if 'SLURM_JOB_ID' in os.environ:
         msg += '* SLURM:\n'
-        msg += f'      - SLURM_JOB_ID = {os.environ.get("SLURM_JOB_ID")}\n'
-        msg += f'      - SLURM_STEP_ID = {os.environ.get("SLURM_STEP_ID")}\n'
+        msg += f'      - SLURM_JOB_ID = {slurm.slurm_job_id()}\n'
+        msg += f'      - SLURM_STEP_ID = {slurm.slurm_step_id()}\n'
         msg += f'      - SLURM_STEP_NODELIST = {os.environ.get("SLURM_STEP_NODELIST")}\n'
         msg += f'      - SLURM_TASKS_PER_NODE = {os.environ.get("SLURM_TASKS_PER_NODE")}\n'
         msg += f'      - SLURM_STEP_GPUS = {os.environ.get("SLURM_STEP_GPUS")}\n'

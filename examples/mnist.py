@@ -77,7 +77,8 @@ class MNISTStage(TrainValStage):
 
 def main():
     init_process_group_auto()
-    pipeline = TrainingPipeline()
+    pipeline = TrainingPipeline(name='mnist')
+    pipeline.enable_checkpointing('checkpoints', resume=False)
     pipeline.append_stage(MNISTStage(), max_epochs=3)
     pipeline.run()
 

@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Union, Optional
 from datetime import datetime
+import sys
+
 from progress_table import ProgressTable
 import torch
 
@@ -27,8 +29,7 @@ class Stage:
         self.start_time = None
         self.stop_time = None
         self.current_epoch = 1
-        self.table = ProgressTable()
-        self._setup_table()
+        self.table = None
 
 
     @property
@@ -145,6 +146,8 @@ class Stage:
 
     def _pre_stage(self):
         self.start_time = datetime.now()
+        self.table = ProgressTable(file = sys.stdout)
+        self._setup_table()
         if len(self.pipeline.stages) > 1:
             self.logging.info(f'\n========== STAGE: {self.name} ==========')
         self.pre_stage()
