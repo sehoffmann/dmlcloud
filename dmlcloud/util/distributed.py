@@ -15,9 +15,11 @@ def root_only(fn):
     """
     Decorator for methods that should only be called on the root rank.
     """
+
     def wrapper(*args, **kwargs):
         if is_root():
             return fn(*args, **kwargs)
+
     return wrapper
 
 
@@ -38,11 +40,13 @@ def root_first():
         finally:
             pass
 
+
 def mpi_local_comm():
     try:
         from mpi4py import MPI
+
         comm = MPI.COMM_WORLD
-        local_comm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0, MPI.INFO_NULL)  
+        local_comm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0, MPI.INFO_NULL)
         return local_comm
     except ImportError:
         return None
@@ -56,7 +60,7 @@ def local_rank():
         return local_comm.Get_rank()
     else:
         return None
-    
+
 
 def local_size():
     if 'LOCAL_WORLD_SIZE' in os.environ:
@@ -90,7 +94,7 @@ def shard_indices(n, rank, size, shuffle=True, drop_remainder=False, seed=0):
 
 def init_process_group_dummy():
     """
-    Initializes the process group with a single process. 
+    Initializes the process group with a single process.
     Uses HashStore under the hood. Useful for applications that
     only run on a single gpu.
     """
@@ -156,11 +160,12 @@ def init_process_group_auto(ip_idx=0, port=None, **kwargs):
     else:
         try:
             from mpi4py import MPI
+
             if MPI.COMM_WORLD.Get_size() > 1:
                 method = 'MPI'
         except ImportError:
             pass
-    
+
     if method == 'env':
         dist.init_process_group(init_method='env://', **kwargs)
     elif method == 'MPI':

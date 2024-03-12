@@ -1,25 +1,19 @@
 import sys
+
 sys.path.insert(0, './')
 
 import torch
-import torch.distributed as dist
-from torch import nn
-from torchvision import transforms, datasets
-from torch.utils.data import DataLoader
-
 from dmlcloud.pipeline import TrainingPipeline
 from dmlcloud.stage import Stage
 from dmlcloud.util.distributed import init_process_group_auto, is_root, root_first
+from torch import nn
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
 
 
 class MNISTStage(Stage):
-
-
     def pre_stage(self):
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
-        ])
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
 
         with root_first():
             train_dataset = datasets.MNIST(root='data', train=True, download=is_root(), transform=transform)
@@ -38,16 +32,14 @@ class MNISTStage(Stage):
             nn.ReLU(),
             nn.MaxPool2d(2),
             nn.Flatten(),
-            nn.Linear(784, 10),  
+            nn.Linear(784, 10),
         ).to(self.pipeline.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
         self.loss = nn.CrossEntropyLoss()
 
-
     def run_epoch(self):
         self._train_epoch()
-        self._val_epoch()      
-
+        self._val_epoch()
 
     def _train_epoch(self):
         self.model.train()
@@ -65,7 +57,6 @@ class MNISTStage(Stage):
 
             self._log_metrics(img, target, output, loss)
 
-
     @torch.no_grad()
     def _val_epoch(self):
         self.model.eval()
@@ -79,11 +70,9 @@ class MNISTStage(Stage):
 
             self._log_metrics(img, target, output, loss)
 
-
     def _log_metrics(self, img, target, output, loss):
         self.track_reduce('loss', loss)
         self.track_reduce('accuracy', (output.argmax(1) == target).float().mean())
-
 
     def table_columns(self):
         columns = super().table_columns()
@@ -92,7 +81,6 @@ class MNISTStage(Stage):
         columns.insert(3, {'name': '[Train] Acc.', 'metric': 'train/accuracy'})
         columns.insert(4, {'name': '[Val] Acc.', 'metric': 'val/accuracy'})
         return columns
-
 
 
 def main():

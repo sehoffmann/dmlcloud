@@ -1,40 +1,28 @@
 import sys
+
 sys.path.insert(0, './')
 
 import torch
-import torch.distributed as dist
-from torch import nn
-from torchvision import transforms, datasets
-from torch.utils.data import DataLoader
-
 from dmlcloud.pipeline import TrainingPipeline
 from dmlcloud.stage import TrainValStage
 from dmlcloud.util.distributed import init_process_group_auto, is_root, root_first
+from torch import nn
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
 
 
 class MNISTStage(TrainValStage):
-
-
     def pre_stage(self):
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,))
-        ])
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
 
         with root_first():
             train_dataset = datasets.MNIST(root='data', train=True, download=is_root(), transform=transform)
             train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-            self.pipeline.register_dataset(
-                'train', 
-                DataLoader(train_dataset, batch_size=32, sampler=train_sampler)
-            )
+            self.pipeline.register_dataset('train', DataLoader(train_dataset, batch_size=32, sampler=train_sampler))
 
             val_dataset = datasets.MNIST(root='data', train=False, download=is_root(), transform=transform)
             val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
-            self.pipeline.register_dataset(
-                'val', 
-                DataLoader(val_dataset, batch_size=32, sampler=val_sampler)
-            )
+            self.pipeline.register_dataset('val', DataLoader(val_dataset, batch_size=32, sampler=val_sampler))
 
         model = nn.Sequential(
             nn.Conv2d(1, 16, 3, padding=1),
@@ -44,17 +32,13 @@ class MNISTStage(TrainValStage):
             nn.ReLU(),
             nn.MaxPool2d(2),
             nn.Flatten(),
-            nn.Linear(784, 10),  
+            nn.Linear(784, 10),
         )
         self.pipeline.register_model('cnn', model)
-        
-        self.pipeline.register_optimizer(
-            'adam', 
-            torch.optim.Adam(model.parameters(), lr=1e-3)
-        )
+
+        self.pipeline.register_optimizer('adam', torch.optim.Adam(model.parameters(), lr=1e-3))
 
         self.loss = nn.CrossEntropyLoss()
-
 
     def step(self, batch) -> torch.Tensor:
         img, target = batch
@@ -65,7 +49,6 @@ class MNISTStage(TrainValStage):
 
         self.track_reduce('accuracy', (output.argmax(1) == target).float().mean())
         return loss
-
 
     def table_columns(self):
         columns = super().table_columns()

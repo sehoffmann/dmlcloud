@@ -1,6 +1,6 @@
 import importlib
-from typing import Optional
 from types import ModuleType
+from typing import Optional
 
 
 def try_import(name: str) -> Optional[ModuleType]:

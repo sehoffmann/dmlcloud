@@ -1,20 +1,19 @@
 import sys
+
 sys.path.insert(0, './')
 
-import torch
 import pytest
+import torch
+from dmlcloud.metrics import MetricReducer, MetricTracker, Reduction
 
-
-from dmlcloud.metrics import MetricTracker, Reduction, MetricReducer
 
 class TestMetricReducer:
-
     def test_local_reduction(self):
         reducer = MetricReducer(reduction=Reduction.MIN, globally=False)
         reducer.append(torch.tensor([1, 2, 3], dtype=torch.float))
         reducer.append(torch.tensor([-1, -2, -3], dtype=torch.float))
-        reducer.append(torch.tensor([1,7,10], dtype=torch.float))
-        
+        reducer.append(torch.tensor([1, 7, 10], dtype=torch.float))
+
         assert reducer.reduce_locally().item() == -3
         assert reducer.reduce_globally().item() == -3
 
@@ -30,16 +29,16 @@ class TestMetricReducer:
         assert reducer.reduce_locally().item() == 2
         assert reducer.reduce_globally().item() == 2
 
-    
     def test_global_reduction(self):
         import torch.distributed as dist
+
         dist.init_process_group(init_method='tcp://localhost:12345', rank=0, world_size=1)
 
         reducer = MetricReducer(reduction=Reduction.MIN, globally=True)
         reducer.append(torch.tensor([1, 2, 3], dtype=torch.float))
         reducer.append(torch.tensor([-1, -2, -3], dtype=torch.float))
-        reducer.append(torch.tensor([1,7,10], dtype=torch.float))
-        
+        reducer.append(torch.tensor([1, 7, 10], dtype=torch.float))
+
         assert reducer.reduce_locally().item() == -3
         assert reducer.reduce_globally().item() == -3
 
@@ -55,18 +54,11 @@ class TestMetricReducer:
         assert reducer.reduce_locally().item() == 2
         assert reducer.reduce_globally().item() == 2
 
-
     def test_partial_reduction(self):
-        tensor = torch.tensor([
-            [
-                [1, 2, 3], [4, 5, 6]
-            ], 
-            [
-                [1, 2, 3], [4, 5, 6]
-            ]], dtype=torch.float)  # shape: 2x2x3
+        tensor = torch.tensor([[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]], dtype=torch.float)  # shape: 2x2x3
         print(tensor.shape)
 
-        reducer = MetricReducer(reduction=Reduction.MIN, globally=False, dim=[1,2])
+        reducer = MetricReducer(reduction=Reduction.MIN, globally=False, dim=[1, 2])
         reducer.append(tensor)
         result = reducer.reduce_locally()
         assert result.shape == (2,)
@@ -76,7 +68,7 @@ class TestMetricReducer:
         reducer = MetricReducer(reduction=Reduction.SUM, globally=False, dim=2)
         reducer.append(tensor)
         result = reducer.reduce_locally()
-        assert result.shape == (2,2)
+        assert result.shape == (2, 2)
         assert result[0, 0].item() == 6
         assert result[0, 1].item() == 15
         assert result[1, 0].item() == 6
@@ -100,7 +92,7 @@ class TestMetricTracker:
         assert len(tracker) == 0
 
         tracker.register_metric('A')
-        tracker.register_metric('B', reduction=Reduction.MEAN, globally=False)        
+        tracker.register_metric('B', reduction=Reduction.MEAN, globally=False)
         assert len(tracker) == 2
 
         assert 'A' in tracker
@@ -133,7 +125,6 @@ class TestMetricTracker:
         tracker.register_metric('B', reduction=Reduction.MEAN, globally=False)
         assert len(tracker['B']) == 2 and tracker['B'][1] is None
 
-
     def test_track(self):
         tracker = MetricTracker()
         tracker.register_metric('A')
@@ -161,7 +152,7 @@ class TestMetricTracker:
         tracker.register_metric('B', reduction=Reduction.MEAN, globally=False)
         tracker.track('A', 1)
         print(str(tracker))
-    
+
     def test_manual_reduction(self):
         tracker = MetricTracker()
         tracker.register_metric('A')
@@ -179,7 +170,7 @@ class TestMetricTracker:
 
         with pytest.raises(ValueError):
             tracker.reduce_all(prefix='B')
-        
+
         # does not throw, nor modify value
         tracker.reduce_all(prefix='B', strict=False)
         assert tracker.current_value('B').item() == 6.0
@@ -191,13 +182,11 @@ class TestMetricTracker:
         assert tracker['A'] == [None]
         assert tracker.current_value('B') is None
 
-
-
     def test_serialization(self):
         tracker1 = MetricTracker()
         tracker1.register_metric('A')
         tracker1.register_metric('B', reduction=Reduction.MEAN, globally=False)
-        
+
         tracker1.track('A', 1)
         tracker1.track('B', torch.randn(3, 2))
         tracker1.next_epoch()

@@ -27,12 +27,12 @@ def reduce_tensor(tensor, reduction, dim=None):
 
     # required because dim=None is not supported by torch
     if dim is None:
-        dim = list(range(tensor.dim())) 
+        dim = list(range(tensor.dim()))
 
     if reduction is Reduction.MEAN:
         return tensor.mean(dim)
     elif reduction is Reduction.SUM:
-        return  tensor.sum(dim)
+        return tensor.sum(dim)
     elif reduction is Reduction.MIN:
         return tensor.amin(dim)
     elif reduction is Reduction.MAX:
@@ -79,7 +79,7 @@ class MetricReducer:
     def __iadd__(self, value):
         self.append(value)
         return self
-    
+
     def __setitem__(self, idx, value):
         value = torch.as_tensor(value)
         value = value.detach().cpu()
@@ -93,7 +93,7 @@ class MetricReducer:
 
     def __len__(self):
         return len(self.values)
-    
+
     def __iter__(self):
         return iter(self.values)
 
@@ -106,7 +106,7 @@ class MetricReducer:
 
     def reduce_locally(self):
         if isinstance(self.dim, list):
-            dim = [0] + [d+1 for d in self.dim]
+            dim = [0] + [d + 1 for d in self.dim]
         elif isinstance(self.dim, int):
             dim = [0, self.dim + 1]
         else:
@@ -124,15 +124,15 @@ class MetricReducer:
             else:
                 dist.all_reduce(tensor, op=self.reduction.as_torch(), group=group, async_op=async_op)
         return tensor
-        
+
     def state_dict(self):
         return {
             'reduction': self.reduction,
             'dim': self.dim,
             'globally': self.globally,
-            'values': self.values
+            'values': self.values,
         }
-    
+
     def load_state_dict(self, state):
         self.reduction = state['reduction']
         self.dim = state['dim']
@@ -165,7 +165,7 @@ class MetricTracker:
         """
         if name not in self:
             raise ValueError(f'Metric {name} does not exist')
-        return list(self.histories[name])[:self.epoch-1]
+        return list(self.histories[name])[: self.epoch - 1]
 
     def __contains__(self, name):
         return name in self.histories
@@ -175,7 +175,7 @@ class MetricTracker:
 
     def __iter__(self):
         return iter(self.histories)
-    
+
     def current_value(self, name):
         """
         If the metric already has an reduced value for the current epoch, it is returned. Otherwise, None is returned.
@@ -237,7 +237,7 @@ class MetricTracker:
         If prefix is specified, only metrics with the specified prefix are reduced.
         If strict is True, an error is raised if a metric has already been reduced for the current epoch.
 
-        After this method has been called, no more values for the reduced metrics can be tracked for the current epoch, 
+        After this method has been called, no more values for the reduced metrics can be tracked for the current epoch,
         and next_epoch() must be called to be able to track new values.
         """
         for name, history in self.histories.items():
@@ -267,10 +267,10 @@ class MetricTracker:
         state = {
             'epoch': self.epoch,
             'histories': dict(self.histories),
-            'reducers': {name: reducer.state_dict() for name, reducer in self.reducers.items()}
+            'reducers': {name: reducer.state_dict() for name, reducer in self.reducers.items()},
         }
         return state
-    
+
     def load_state_dict(self, state):
         self.epoch = state['epoch']
         self.histories = state['histories']
@@ -279,9 +279,8 @@ class MetricTracker:
             self.reducers[name] = MetricReducer()
             self.reducers[name].load_state_dict(reducer_state)
 
-
     def __str__(self):
-        s = f'MetricTracker('
+        s = 'MetricTracker('
         for name, history in self.histories.items():
             s += f'\n  {name}: {history}'
         if len(self.histories) > 0:

@@ -1,17 +1,16 @@
 import logging
 import os
-import sys
-from pathlib import Path
-from datetime import datetime
 import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
 
 import torch
-import numpy as np
 import torch.distributed as dist
 
 import dmlcloud
-from .git import git_hash
 from . import slurm
+from .git import git_hash
 from .thirdparty import try_get_version
 
 
@@ -24,11 +23,11 @@ class IORedirector:
     class Stdout:
         def __init__(self, parent):
             self.parent = parent
-        
+
         def write(self, data):
             self.parent.file.write(data)
             self.parent.stdout.write(data)
-        
+
         def flush(self):
             self.parent.file.flush()
             self.parent.stdout.flush()
@@ -36,15 +35,14 @@ class IORedirector:
     class Stderr:
         def __init__(self, parent):
             self.parent = parent
-        
+
         def write(self, data):
             self.parent.file.write(data)
             self.parent.stderr.write(data)
-        
+
         def flush(self):
             self.parent.file.flush()
             self.parent.stderr.flush()
-
 
     def __init__(self, log_file: Path):
         self.path = log_file
@@ -77,7 +75,7 @@ class IORedirector:
     def __enter__(self):
         self.install()
         return self
-    
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.uninstall()
 
@@ -99,6 +97,7 @@ def add_log_handlers(logger: logging.Logger):
     stderr_handler.setFormatter(logging.Formatter())
     logger.addHandler(stderr_handler)
 
+
 def experiment_header(
     name: str | None,
     checkpoint_dir: str | None,
@@ -110,12 +109,13 @@ def experiment_header(
     msg += f'- Training on {dist.get_world_size()} GPUs\n'
     return msg
 
-def general_diagnostics() -> str:    
+
+def general_diagnostics() -> str:
     msg = '* GENERAL:\n'
     msg += f'      - argv: {sys.argv}\n'
     msg += f'      - cwd: {Path.cwd()}\n'
-    
-    msg += f'      - host (root): {os.environ.get("HOSTNAME")}\n'  
+
+    msg += f'      - host (root): {os.environ.get("HOSTNAME")}\n'
     msg += f'      - user: {os.environ.get("USER")}\n'
     msg += f'      - git-hash: {git_hash()}\n'
     msg += f'      - conda-env: {os.environ.get("CONDA_DEFAULT_ENV", "N/A")}\n'
@@ -134,7 +134,7 @@ def general_diagnostics() -> str:
     msg += f'      - dmlcloud: {dmlcloud.__version__}\n'
     msg += f'      - cuda: {torch.version.cuda}\n'
     try:
-        msg += f'      - ' + Path('/proc/driver/nvidia/version').read_text().splitlines()[0] + '\n'
+        msg += '      - ' + Path('/proc/driver/nvidia/version').read_text().splitlines()[0] + '\n'
     except (FileNotFoundError, IndexError):
         pass
 
