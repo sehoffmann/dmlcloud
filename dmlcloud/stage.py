@@ -8,9 +8,6 @@ import torch
 from .metrics import MetricTracker, Reduction
 from .util.distributed import root_only, is_root
 
-class StopStageException(Exception):
-    pass
-
 
 class Stage:
     """
@@ -25,12 +22,17 @@ class Stage:
         self.pipeline = None  # set by the pipeline
         self.max_epochs = None  # set by the pipeline
         self.name = None  # set by the pipeline
-        self.metric_prefix = None
+        
         self.start_time = None
         self.stop_time = None
+        self.epoch_start_time = None
+        self.epoch_stop_time = None
         self.current_epoch = 1
-        self.table = None
+        self._stop_requested = False
 
+        self.metric_prefix = None
+        self.table = None
+        
 
     @property
     def tracker(self) -> MetricTracker:
@@ -73,7 +75,7 @@ class Stage:
         self.pipeline.track(name, value, step)
 
     def stop_stage(self):
-        raise StopStageException()
+        self._stop_requested = True
 
     def pre_stage(self):
         """
@@ -120,7 +122,7 @@ class Stage:
         If 'metric' is None, then the user is responsible for updating the column manually.
         """
         columns = [
-            {'name': 'Epoch', 'metric': None},
+            {'name': 'Epoch', 'metric': 'misc/epoch'},
             {'name': 'Time/Epoch', 'metric': None},
         ]
         if self.max_epochs is not None:
@@ -135,11 +137,9 @@ class Stage:
         self._pre_stage()
         while self.max_epochs is None or self.current_epoch <= self.max_epochs:
             self._pre_epoch()
-            try:
-                self.run_epoch()
-                self._post_epoch()
-            except StopStageException:
-                self._post_epoch()
+            self.run_epoch()
+            self._post_epoch()
+            if self._stop_requested:
                 break
         self._post_stage()
 
@@ -148,9 +148,16 @@ class Stage:
         self.start_time = datetime.now()
         self.table = ProgressTable(file = sys.stdout)
         self._setup_table()
+        
         if len(self.pipeline.stages) > 1:
-            self.logging.info(f'\n========== STAGE: {self.name} ==========')
+            self.logger.info(f'\n========== STAGE: {self.name} ==========')
+        
         self.pre_stage()
+        
+        for handler in self.logger.handlers:
+            handler.flush()
+
+        self.table._print_header()
 
 
     def _post_stage(self):
@@ -162,15 +169,22 @@ class Stage:
         self.post_stage()
 
     def _pre_epoch(self):
+        self.epoch_start_time = datetime.now()
         self.pre_epoch()
+        self.pipeline._pre_epoch()
 
     def _post_epoch(self):
+        self.epoch_stop_time = datetime.now()
         self._reduce_metrics()
         self.post_epoch()
+        self.pipeline._post_epoch()
         self._update_table()
         self.current_epoch += 1
+        
 
     def _reduce_metrics(self):
+        self.track(name='misc/epoch', value=self.current_epoch, prefixed=False)
+        self.track(name='misc/epoch_time', value=(self.epoch_stop_time - self.epoch_stop_time).total_seconds(), prefixed=False)
         self.tracker.next_epoch()
         pass    
 
@@ -185,6 +199,7 @@ class Stage:
     def _update_table(self):
         self.table.update('Epoch', self.current_epoch)
         self.table.update('Time/Epoch', (datetime.now() - self.start_time) / self.current_epoch)
+        self.table.update('ETA', (datetime.now() - self.start_time) / self.current_epoch * (self.max_epochs - self.current_epoch))
         for column_dct in self._metrics():
             display_name = column_dct['name']
             metric_name = column_dct['metric']

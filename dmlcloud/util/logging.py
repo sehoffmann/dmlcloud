@@ -59,14 +59,19 @@ class IORedirector:
         self.file = self.path.open('a')
         self.stdout = sys.stdout
         self.stderr = sys.stderr
+        self.stdout.flush()
+        self.stderr.flush()
 
         sys.stdout = self.Stdout(self)
         sys.stderr = self.Stderr(self)
 
     def uninstall(self):
+        self.stdout.flush()
+        self.stderr.flush()
+
         sys.stdout = self.stdout
         sys.stderr = self.stderr
-        self.file.flush()
+
         self.file.close()
 
     def __enter__(self):
@@ -78,10 +83,14 @@ class IORedirector:
 
 
 def add_log_handlers(logger: logging.Logger):
+    if logger.hasHandlers():
+        return
+
     logger.setLevel(logging.INFO if dist.get_rank() == 0 else logging.WARNING)
 
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.addFilter(lambda record: record.levelno < logging.WARNING)
     stdout_handler.setFormatter(logging.Formatter())
     logger.addHandler(stdout_handler)
 

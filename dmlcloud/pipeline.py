@@ -13,11 +13,10 @@ from .stage import Stage
 from .metrics import MetricTracker, Reduction
 from .util.distributed import local_rank
 from .util.logging import add_log_handlers, general_diagnostics, experiment_header, IORedirector
+from dmlcloud.util.wandb import wandb_is_initialized, wandb_set_startup_timeout
 
 
 class TrainingPipeline:
-
-
 
     def __init__(
             self, 
@@ -43,6 +42,9 @@ class TrainingPipeline:
         self.start_time = None
         self.stop_time = None
         self.current_stage = None
+
+        self.wandb = False
+        self._wandb_initalizer = None
 
         self.stages = []
         self.datasets = {}
@@ -105,8 +107,8 @@ class TrainingPipeline:
         self.datasets[name] = dataset
         if verbose:
             msg = f'Dataset "{name}":\n'
-            msg += f'  - Batches (/Worker): {len(dataset)}\n'
             msg += f'  - Batches (Total): ~{len(dataset) * dist.get_world_size()}\n'
+            msg += f'  - Batches (/Worker): {len(dataset)}\n'
             self.logger.info(msg)
 
 
@@ -133,16 +135,43 @@ class TrainingPipeline:
         path = None
         if resume and CheckpointDir(root).is_valid:
             path = root
+            self.resumed = True
         elif resume and find_slurm_checkpoint(root):
             path = find_slurm_checkpoint(root)
-
+            self.resumed = True
         if path is None:
             path = generate_checkpoint_path(
                 root=root,
                 name=self.name,
                 creation_time=self.start_time
             )
+            self.resumed = False
         self.checkpoint_dir = CheckpointDir(path)
+
+
+    def enable_wandb(
+        self, 
+        project: str | None = None,
+        entity: str | None = None,
+        group: str | None = None, 
+        tags: List[str] | None = None,
+        startup_timeout: int = 360,
+        **kwargs
+    ):
+        import wandb  # import now to avoid potential long import times later on
+        self.wandb = True
+        def initializer():
+            wandb_set_startup_timeout(startup_timeout)
+            wandb.init(
+                config=OmegaConf.to_container(self.cfg, resolve=True),
+                name=self.name,
+                entity=entity,
+                project=project,
+                group=group,
+                tags=tags,
+                **kwargs
+            ) 
+        self._wandb_initalizer = initializer
 
 
     def track_reduce(self, 
@@ -169,6 +198,17 @@ class TrainingPipeline:
             self.tracker.register_metric(name)
 
         self.tracker.track(name, value)
+
+
+    def run(self):
+        """
+        Starts the training and runs all registered stages.
+        """
+        with _RunGuard(self):
+            self._pre_run()
+            for stage in self.stages:
+                stage.run()
+            self._post_run()
 
 
     def pre_run(self):
@@ -201,20 +241,15 @@ class TrainingPipeline:
             self.device = torch.device('cpu')
 
         if self.checkpointing_enabled:
-            if self.checkpoint_dir.is_valid:
-                self.resumed = True
-            else:
-                self.checkpoint_dir.create()
-                self.resumed = False
-            self.io_redirector = IORedirector(self.checkpoint_dir.log_file)
-            self.io_redirector.install()
-        else:
-            self.resumed = False
+            self._init_checkpointing()
+
+        if self.wandb:
+            self._wandb_initalizer()
 
         self.start_time = datetime.now()
 
         add_log_handlers(self.logger)
-        header = experiment_header(self.name, self.checkpoint_dir, self.start_time)
+        header = '\n' + experiment_header(self.name, self.checkpoint_dir, self.start_time)
         self.logger.info(header)
 
         if self.resumed:
@@ -227,6 +262,18 @@ class TrainingPipeline:
         self.pre_run()
 
 
+    def _init_checkpointing(self):
+        if not self.checkpoint_dir.is_valid:
+            self.checkpoint_dir.create()
+            self.checkpoint_dir.save_config(self.cfg)
+        self.io_redirector = IORedirector(self.checkpoint_dir.log_file)
+        self.io_redirector.install()
+
+    def _resume_run(self):
+        self.logger.info(f'Resuming training from checkpoint: {self.checkpoint_dir}')
+        self.resume_run()
+
+
     def _post_run(self):
         self.stop_time = datetime.now()
         self.logger.info(f'Finished training in {self.stop_time - self.start_time} ({self.stop_time})')
@@ -235,24 +282,40 @@ class TrainingPipeline:
         self.post_run()
 
 
-    def _resume_run(self):
-        self.logger.info(f'Resuming training from checkpoint: {self.checkpoint_dir}')
-        self.resume_run()
+    def _pre_epoch(self):
+        pass
 
-    def run(self):
-        with _Guard(self):
-            self._pre_run()
-            for stage in self.stages:
-                stage.run()
-            self._post_run()
 
+    def _post_epoch(self):
+        if self.wandb:
+            import wandb
+            metrics = {name: self.tracker[name][-1] for name in self.tracker}
+            wandb.log(metrics)
+
+
+    def _cleanup(self, exc_type, exc_value, traceback):
+        """
+        Called by _RunGuard to ensure that the pipeline is properly cleaned up
+        """
+        if exc_type is KeyboardInterrupt:
+            self.logger.info('------- Training interrupted by user -------')
+        elif exc_type is not None:
+            self.logger.error('------- Training failed with an exception -------', exc_info=(exc_type, exc_value, traceback))
+
+        if self.wandb:
+            import wandb
+            if wandb_is_initialized():
+                wandb.finish(
+                    exit_code=0 if exc_type is None else 1
+                )
+
+        if self.io_redirector is not None:
+            self.io_redirector.uninstall()
+        
+        return False
 
     
-class _Guard:
-    """
-    Used by TrainingPipeline to ensure that the pipeline is properly cleaned up
-    """
-
+class _RunGuard:
     def __init__(self, pipeline):
         self.pipeline = pipeline
 
@@ -260,5 +323,4 @@ class _Guard:
         pass
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.pipeline.io_redirector is not None:
-            self.pipeline.io_redirector.uninstall()
+        return self.pipeline._cleanup(exc_type, exc_value, traceback)

@@ -69,16 +69,16 @@ class MNISTStage(TrainValStage):
 
     def table_columns(self):
         columns = super().table_columns()
-        columns.insert(-1, {'name': '[Train] Acc.', 'metric': 'train/accuracy'})
         columns.insert(-2, {'name': '[Val] Acc.', 'metric': 'val/accuracy'})
+        columns.insert(-2, {'name': '[Train] Acc.', 'metric': 'train/accuracy'})
         return columns
-
 
 
 def main():
     init_process_group_auto()
     pipeline = TrainingPipeline(name='mnist')
     pipeline.enable_checkpointing('checkpoints', resume=False)
+    pipeline.enable_wandb()
     pipeline.append_stage(MNISTStage(), max_epochs=3)
     pipeline.run()
 
