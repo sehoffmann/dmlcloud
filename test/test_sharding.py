@@ -2,7 +2,7 @@ import sys
 
 import numpy as np
 import pytest
-from dmlcloud.util import shard_indices
+from dmlcloud.util.distributed import shard_indices
 from numpy.testing import assert_array_equal
 
 

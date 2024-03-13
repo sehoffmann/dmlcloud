@@ -29,11 +29,7 @@ class TestMetricReducer:
         assert reducer.reduce_locally().item() == 2
         assert reducer.reduce_globally().item() == 2
 
-    def test_global_reduction(self):
-        import torch.distributed as dist
-
-        dist.init_process_group(init_method='tcp://localhost:12345', rank=0, world_size=1)
-
+    def test_global_reduction(self, torch_distributed):
         reducer = MetricReducer(reduction=Reduction.MIN, globally=True)
         reducer.append(torch.tensor([1, 2, 3], dtype=torch.float))
         reducer.append(torch.tensor([-1, -2, -3], dtype=torch.float))

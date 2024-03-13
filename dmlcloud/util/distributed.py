@@ -172,3 +172,12 @@ def init_process_group_auto(ip_idx=0, port=None, **kwargs):
         init_process_group_MPI(ip_idx=ip_idx, port=port, **kwargs)
     else:
         init_process_group_dummy()
+
+
+def deinitialize_torch_distributed():
+    """
+    Deinitializes the torch distributed framework.
+    At the time of writing, `dist.destroy_process_group()` is not well documented.
+    Hence, this function.
+    """
+    dist.destroy_process_group()

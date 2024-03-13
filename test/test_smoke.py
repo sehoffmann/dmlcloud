@@ -2,8 +2,9 @@ import sys
 
 import pytest
 import torch
-from dmlcloud.config import DefaultConfig
-from dmlcloud.training import BaseTrainer, ClassificationTrainer
+
+from dmlcloud.stage import TrainValStage
+from dmlcloud.pipeline import TrainingPipeline
 
 
 class DummyDataset(torch.utils.data.Dataset):
@@ -14,51 +15,33 @@ class DummyDataset(torch.utils.data.Dataset):
         return torch.randn(10), torch.randint(0, 10, size=(1,)).item()
 
 
-class SmokeTrainer(BaseTrainer):
-    def create_dataset(self):
-        train_dl = torch.utils.data.DataLoader(DummyDataset(), batch_size=4)
-        val_dl = torch.utils.data.DataLoader(DummyDataset(), batch_size=4)
-        return train_dl, val_dl
+class DummyStage(TrainValStage):
+    def pre_stage(self):
+        self.model = torch.nn.Linear(10, 10)
+        self.pipeline.register_model('linear', self.model)
 
-    def create_model(self):
-        return torch.nn.Linear(10, 10)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=1e-3)
+        self.pipeline.register_optimizer('sgd', self.optimizer)
 
-    def create_loss(self):
-        return torch.nn.CrossEntropyLoss()
+        self.pipeline.register_dataset('train', torch.utils.data.DataLoader(DummyDataset(), batch_size=4))
+        self.pipeline.register_dataset('val', torch.utils.data.DataLoader(DummyDataset(), batch_size=4))
 
-    def create_optimizer(self, params, lr):
-        return torch.optim.SGD(params, lr=lr)
+        self.loss = torch.nn.CrossEntropyLoss()
 
-    def forward_step(self, batch_idx, batch):
-        x, y = (tensor.to(self.device) for tensor in batch)
-        pred = self.model(x)
-        loss = self.loss_fn(pred, y)
+
+    def step(self, batch):
+        x, y = batch
+        x, y = x.to(self.device), y.to(self.device)
+        output = self.model(x)
+        loss = self.loss(output, y)
         return loss
 
 
-class SmokeClassificationTrainer(ClassificationTrainer):
-    def create_dataset(self):
-        train_dl = torch.utils.data.DataLoader(DummyDataset(), batch_size=4)
-        val_dl = torch.utils.data.DataLoader(DummyDataset(), batch_size=4)
-        return train_dl, val_dl
-
-    def create_model(self):
-        return torch.nn.Linear(10, 10)
-
-    def create_optimizer(self, params, lr):
-        return torch.optim.SGD(params, lr=lr)
-
-
 class TestSmoke:
-    def test_smoke(self):
-        cfg = DefaultConfig()
-        trainer = SmokeTrainer(cfg)
-        trainer.train(use_checkpointing=False, use_wandb=False, print_diagnostics=False)
-
-    def test_classification_smoke(self):
-        cfg = DefaultConfig()
-        trainer = SmokeClassificationTrainer(cfg)
-        trainer.train(use_checkpointing=False, use_wandb=False, print_diagnostics=False)
+    def test_smoke(self, torch_distributed):
+        pipeline = TrainingPipeline()
+        pipeline.append_stage(DummyStage(), max_epochs=1)
+        pipeline.run()
 
 
 if __name__ == '__main__':
