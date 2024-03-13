@@ -8,15 +8,15 @@ authors = [
     {name = "Sebastian Hoffmann"}
 ]
 description = "Distributed torch training using horovod and slurm"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {file = "LICENSE"}
-keywords = ["pytorch", "horovod", "slurm", "distributed", "training"]
+keywords = ["pytorch", "torch.distributed", "slurm", "distributed training", "deep learning"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: BSD License",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dynamic = ["version", "readme", "dependencies"]
@@ -32,4 +32,4 @@ dependencies = {file = ["requirements.txt"]}
 [tool.black]
 skip-string-normalization = true
 line-length = 120
-target-version = ["py39"]
+target-version = ["py310"]

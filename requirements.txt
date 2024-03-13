@@ -1,4 +1,4 @@
 torch
-wandb
 numpy
-progress_table
+progress_table>=0.1.20,<1.0.0
+omegaconf

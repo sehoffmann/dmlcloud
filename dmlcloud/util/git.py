@@ -1,9 +1,7 @@
-from .project import run_in_project, script_path
+from .project import run_in_project
 
 
 def git_hash(short=False):
-    if script_path() is None:
-        return None
     if short:
         process = run_in_project(['git', 'rev-parse', '--short', 'HEAD'])
     else:
@@ -12,7 +10,5 @@ def git_hash(short=False):
 
 
 def git_diff():
-    if script_path() is None:
-        return None
     process = run_in_project(['git', 'diff', '-U0', '--no-color', 'HEAD'])
     return process.stdout.decode('utf-8').strip()
