@@ -1,6 +1,5 @@
 import pytest
-
-from dmlcloud.util.distributed import init_process_group_dummy, deinitialize_torch_distributed
+from dmlcloud.util.distributed import deinitialize_torch_distributed, init_process_group_dummy
 
 
 @pytest.fixture

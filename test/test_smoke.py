@@ -2,9 +2,8 @@ import sys
 
 import pytest
 import torch
-
-from dmlcloud.stage import TrainValStage
 from dmlcloud.pipeline import TrainingPipeline
+from dmlcloud.stage import TrainValStage
 
 
 class DummyDataset(torch.utils.data.Dataset):
@@ -27,7 +26,6 @@ class DummyStage(TrainValStage):
         self.pipeline.register_dataset('val', torch.utils.data.DataLoader(DummyDataset(), batch_size=4))
 
         self.loss = torch.nn.CrossEntropyLoss()
-
 
     def step(self, batch):
         x, y = batch
