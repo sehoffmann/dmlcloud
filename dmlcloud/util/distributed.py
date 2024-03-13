@@ -99,7 +99,7 @@ def init_process_group_dummy():
     only run on a single gpu.
     """
     store = dist.HashStore()
-    dist.init_process_group(store=store, rank=0, world_size=1)
+    dist.init_process_group(store=store, rank=0, world_size=1, backend='gloo')
 
 
 def init_process_group_MPI(ip_idx=0, port=None, **kwargs):
