@@ -1,4 +1,4 @@
 torch
-wandb
 numpy
 progress_table
+omegaconf
