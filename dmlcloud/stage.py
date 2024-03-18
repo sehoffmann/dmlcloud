@@ -45,6 +45,10 @@ class Stage:
     def device(self):
         return self.pipeline.device
 
+    @property
+    def config(self):
+        return self.pipeline.config
+
     def track_reduce(
         self,
         name: str,

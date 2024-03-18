@@ -17,13 +17,13 @@ from .util.logging import add_log_handlers, experiment_header, general_diagnosti
 
 
 class TrainingPipeline:
-    def __init__(self, cfg: Optional[Union[OmegaConf, Dict]] = None, name: Optional[str] = None):
-        if cfg is None:
-            self.cfg = OmegaConf.create()
-        elif not isinstance(cfg, OmegaConf):
-            self.cfg = OmegaConf.create(cfg)
+    def __init__(self, config: Optional[Union[OmegaConf, Dict]] = None, name: Optional[str] = None):
+        if config is None:
+            self.config = OmegaConf.create()
+        elif not isinstance(config, OmegaConf):
+            self.config = OmegaConf.create(config)
         else:
-            self.cfg = cfg
+            self.config = config
 
         self.name = name
 
@@ -138,7 +138,7 @@ class TrainingPipeline:
         def initializer():
             wandb_set_startup_timeout(startup_timeout)
             wandb.init(
-                config=OmegaConf.to_container(self.cfg, resolve=True),
+                config=OmegaConf.to_container(self.config, resolve=True),
                 name=self.name,
                 entity=entity,
                 project=project,
@@ -226,7 +226,7 @@ class TrainingPipeline:
             self._resume_run()
 
         diagnostics = general_diagnostics()
-        diagnostics += '\n* CONFIG:\n' + OmegaConf.to_yaml(self.cfg)
+        diagnostics += '\n* CONFIG:\n' + OmegaConf.to_yaml(self.config)
         self.logger.info(diagnostics)
 
         self.pre_run()
@@ -234,7 +234,7 @@ class TrainingPipeline:
     def _init_checkpointing(self):
         if not self.checkpoint_dir.is_valid:
             self.checkpoint_dir.create()
-            self.checkpoint_dir.save_config(self.cfg)
+            self.checkpoint_dir.save_config(self.config)
         self.io_redirector = IORedirector(self.checkpoint_dir.log_file)
         self.io_redirector.install()
 
