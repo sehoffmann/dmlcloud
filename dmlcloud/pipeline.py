@@ -94,8 +94,8 @@ class TrainingPipeline:
                 msg += f'  - Batches (Total): ~{length * dist.get_world_size()}\n'
                 msg += f'  - Batches (/Worker): {length}\n'
             except TypeError:  # __len__ not implemented
-                msg += f'  - Batches (Total): N/A\n'
-                msg += f'  - Batches (/Worker): N/A\n'
+                msg += '  - Batches (Total): N/A\n'
+                msg += '  - Batches (/Worker): N/A\n'
             self.logger.info(msg)
 
     def append_stage(self, stage: Stage, max_epochs: Optional[int] = None, name: Optional[str] = None):

@@ -79,6 +79,14 @@ class TestMetricReducer:
         assert new_reducer.dim == [1, 2, 3]
         assert new_reducer.values == reducer.values
 
+    def test_empty_reduction(self, torch_distributed):
+        reducer = MetricReducer(reduction=Reduction.MIN, globally=True)
+        result = reducer.reduce_locally()
+        assert result is None
+
+        result = reducer.reduce_globally()
+        assert result is None
+
 
 class TestMetricTracker:
     def test_dictionary(self):

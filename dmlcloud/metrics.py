@@ -105,6 +105,9 @@ class MetricReducer:
         self.values.append(value)
 
     def reduce_locally(self):
+        if len(self.values) == 0:
+            return None
+
         if isinstance(self.dim, list):
             dim = [0] + [d + 1 for d in self.dim]
         elif isinstance(self.dim, int):
@@ -115,14 +118,26 @@ class MetricReducer:
         tensor = reduce_tensor(tensor, reduction=self.reduction, dim=dim)
         return tensor
 
-    def reduce_globally(self, group=None, async_op=False):
+    def reduce_globally(self, group=None):
+        # if the list of values is empty, the result is None
+        if self.globally:
+            empty_workers = [None] * dist.get_world_size(group)
+            dist.all_gather_object(empty_workers, len(self.values) == 0, group=group)
+            if any(empty_workers):
+                if len(empty_workers) > 1 and not all(empty_workers):
+                    raise ValueError('Some workers tracked values this epoch and some did not. This is likely a bug.')
+                else:
+                    return None
+        elif len(self.values) == 0:
+            return None
+
         tensor = self.reduce_locally()
         if self.globally:
             if self.reduction == Reduction.MEAN:
-                dist.all_reduce(tensor, op=dist.ReduceOp.SUM, group=group, async_op=async_op)
+                dist.all_reduce(tensor, op=dist.ReduceOp.SUM, group=group)
                 tensor /= dist.get_world_size(group)
             else:
-                dist.all_reduce(tensor, op=self.reduction.as_torch(), group=group, async_op=async_op)
+                dist.all_reduce(tensor, op=self.reduction.as_torch(), group=group)
         return tensor
 
     def state_dict(self):
