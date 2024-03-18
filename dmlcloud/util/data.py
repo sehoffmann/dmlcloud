@@ -3,6 +3,7 @@ from typing import Iterable
 import numpy as np
 import torch.distributed as dist
 import xarray as xr
+from torch.utils.data import IterableDataset
 
 
 def shard_indices(
@@ -19,7 +20,7 @@ def shard_indices(
     return indices[rank::world_size].tolist()  # this also converts np.int64 to python's int
 
 
-def chunked_xr_dataset(
+def sharded_xr_dataset(
     ds: xr.Dataset | xr.DataArray,
     chunk_size: int,
     dim: str,
@@ -50,3 +51,49 @@ def chunked_xr_dataset(
         if load:
             chunk.load()
         yield chunk
+
+
+class ShardedXrDataset(IterableDataset):
+    def __init__(
+        self,
+        ds: xr.Dataset | xr.DataArray,
+        chunk_size: int,
+        dim: str,
+        shuffle: bool = False,
+        drop_remainder: bool = True,
+        seed: int = 0,
+        rank: int | None = None,
+        world_size: int | None = None,
+        process_group: dist.ProcessGroup | None = None,
+        load: bool = True,
+    ):
+        self.ds = ds
+        self.chunk_size = chunk_size
+        self.dim = dim
+        self.shuffle = shuffle
+        self.drop_remainder = drop_remainder
+        self.seed = seed
+        self.load = load
+
+        if rank is None:
+            self.rank = dist.get_rank(process_group)
+        else:
+            self.rank = rank
+
+        if world_size is None:
+            self.world_size = dist.get_world_size(process_group)
+        else:
+            self.world_size = world_size
+
+    def __iter__(self):
+        return sharded_xr_dataset(
+            self.ds,
+            self.chunk_size,
+            self.dim,
+            self.shuffle,
+            self.drop_remainder,
+            self.seed,
+            self.rank,
+            self.world_size,
+            self.load,
+        )

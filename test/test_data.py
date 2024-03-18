@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import pytest
 import xarray as xr
-from dmlcloud.util.data import chunked_xr_dataset, shard_indices
+from dmlcloud.util.data import shard_indices, sharded_xr_dataset
 from numpy.testing import assert_array_equal
 
 
@@ -41,15 +41,15 @@ class TestSharding:
         assert (np.array(indices) >= 0).all() and (np.array(indices) <= 9).all()
 
 
-class TestChunking:
+class TestShardedXr:
     def test_basic(self):
         ds = xr.DataArray(np.arange(100), dims=['x'], name='var').to_dataset()
         world_size = 3
         chunk_size = 15
 
-        chunks_1 = list(chunked_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=0, shuffle=False))
-        chunks_2 = list(chunked_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=1, shuffle=False))
-        chunks_3 = list(chunked_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=2, shuffle=False))
+        chunks_1 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=0, shuffle=False))
+        chunks_2 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=1, shuffle=False))
+        chunks_3 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=2, shuffle=False))
 
         assert len(chunks_1) == 2
         assert len(chunks_2) == 2
@@ -76,9 +76,9 @@ class TestChunking:
         world_size = 3
         chunk_size = 15
 
-        chunks_1 = list(chunked_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=0, shuffle=True, seed=0))
-        chunks_2 = list(chunked_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=1, shuffle=True, seed=0))
-        chunks_3 = list(chunked_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=2, shuffle=True, seed=0))
+        chunks_1 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=0, shuffle=True, seed=0))
+        chunks_2 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=1, shuffle=True, seed=0))
+        chunks_3 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=2, shuffle=True, seed=0))
 
         assert len(chunks_1) == 2
         assert len(chunks_2) == 2
