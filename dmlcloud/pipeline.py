@@ -89,8 +89,13 @@ class TrainingPipeline:
         self.datasets[name] = dataset
         if verbose:
             msg = f'Dataset "{name}":\n'
-            msg += f'  - Batches (Total): ~{len(dataset) * dist.get_world_size()}\n'
-            msg += f'  - Batches (/Worker): {len(dataset)}\n'
+            try:
+                length = len(dataset)
+                msg += f'  - Batches (Total): ~{length * dist.get_world_size()}\n'
+                msg += f'  - Batches (/Worker): {length}\n'
+            except TypeError:  # __len__ not implemented
+                msg += f'  - Batches (Total): N/A\n'
+                msg += f'  - Batches (/Worker): N/A\n'
             self.logger.info(msg)
 
     def append_stage(self, stage: Stage, max_epochs: Optional[int] = None, name: Optional[str] = None):
