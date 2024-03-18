@@ -1,7 +1,6 @@
 import os
 from contextlib import contextmanager
 
-import numpy as np
 import torch.distributed as dist
 
 from .tcp import find_free_port, get_local_ips

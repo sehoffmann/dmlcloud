@@ -1,14 +1,13 @@
 import sys
 
-import xarray as xr
 import numpy as np
 import pytest
-from dmlcloud.util.data import shard_indices, chunked_xr_dataset
+import xarray as xr
+from dmlcloud.util.data import chunked_xr_dataset, shard_indices
 from numpy.testing import assert_array_equal
 
 
 class TestSharding:
-
     def test_types(self):
         indices = shard_indices(10, 0, 2, shuffle=False, drop_remainder=False)
         assert isinstance(indices, list)
@@ -43,7 +42,6 @@ class TestSharding:
 
 
 class TestChunking:
-
     def test_basic(self):
         ds = xr.DataArray(np.arange(100), dims=['x'], name='var').to_dataset()
         world_size = 3
@@ -72,7 +70,6 @@ class TestChunking:
         assert_array_equal(chunks_1[1]['var'], np.arange(45, 60))
         assert_array_equal(chunks_2[1]['var'], np.arange(60, 75))
         assert_array_equal(chunks_3[1]['var'], np.arange(75, 90))
-
 
     def test_shuffled(self):
         ds = xr.DataArray(np.arange(100), dims=['x'], name='var').to_dataset()
