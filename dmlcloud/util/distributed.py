@@ -80,18 +80,6 @@ def print_worker(msg, barrier=True, flush=True):
         dist.barrier()
 
 
-def shard_indices(n, rank, size, shuffle=True, drop_remainder=False, seed=0):
-    indices = np.arange(n)
-
-    if shuffle:
-        np.random.Generator(np.random.MT19937(seed)).shuffle(indices)
-
-    if drop_remainder:
-        indices = indices[: n - n % size]
-
-    return indices[rank::size]
-
-
 def init_process_group_dummy():
     """
     Initializes the process group with a single process.

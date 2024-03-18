@@ -1,7 +1,5 @@
 import sys
 
-sys.path.insert(0, './')
-
 import pytest
 import torch
 from dmlcloud.metrics import MetricReducer, MetricTracker, Reduction
