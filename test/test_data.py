@@ -2,8 +2,9 @@ import sys
 
 import numpy as np
 import pytest
+import torch
 import xarray as xr
-from dmlcloud.util.data import shard_indices, sharded_xr_dataset, ShardedXrDataset
+from dmlcloud.util.data import interleave_batches, shard_indices, sharded_xr_dataset, ShardedXrDataset
 from numpy.testing import assert_array_equal
 from torch.utils.data import DataLoader, IterableDataset
 
@@ -322,6 +323,22 @@ class TestShardedXr:
         assert len(torch_ds2) == 1
         assert len(torch_ds3) == 1
         assert len(torch_ds4) == 1
+
+
+class TestInterleaveBatches:
+    def test_basic(self):
+        batches = [
+            torch.arange(0, 8),
+            torch.arange(8, 16),
+            torch.arange(16, 24),
+            torch.arange(24, 32),
+        ]
+        interleaved_batches = list(t.clone() for t in interleave_batches(batches, num_batches=2))
+        assert len(interleaved_batches) == 4
+        assert {t.item() for t in interleaved_batches[0]} == {0, 1, 2, 3, 8, 9, 10, 11}
+        assert {t.item() for t in interleaved_batches[1]} == {4, 5, 6, 7, 12, 13, 14, 15}
+        assert {t.item() for t in interleaved_batches[2]} == {16, 17, 18, 19, 24, 25, 26, 27}
+        assert {t.item() for t in interleaved_batches[3]} == {20, 21, 22, 23, 28, 29, 30, 31}
 
 
 if __name__ == '__main__':

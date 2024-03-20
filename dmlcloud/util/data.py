@@ -1,6 +1,7 @@
 from typing import Iterable
 
 import numpy as np
+import torch
 import torch.distributed as dist
 import xarray as xr
 from torch.utils.data import get_worker_info, IterableDataset
@@ -104,3 +105,36 @@ class ShardedXrDataset(IterableDataset):
             world_size,
             self.load,
         )
+
+
+def interleave_batches(
+    iterable: Iterable[torch.Tensor], num_batches: int, pin_memory: bool = False
+) -> Iterable[torch.Tensor]:
+    """
+    Interleaves batches from an iterable of batches.
+    Important: Returned batches must be used immediately or copied to avoid overwriting.
+    """
+
+    batches = []
+    memory = None
+    batch_size = None
+    slice_size = None
+    for batch in iterable:
+        if memory is None:
+            batch_size = batch.shape[0]
+            slice_size = batch_size // num_batches
+            if batch_size % num_batches != 0:
+                raise ValueError(f'Batch dimension ({batch_size}) must be divisible by num_batches={num_batches}')
+            memory = torch.empty(
+                (num_batches, *batch.shape), dtype=batch.dtype, device=batch.device, pin_memory=pin_memory
+            )
+
+        batches.append(batch)
+
+        if len(batches) == num_batches:
+            for i in range(num_batches):
+                for j in range(num_batches):
+                    memory[i, j * slice_size : (j + 1) * slice_size] = batches[j][i * slice_size : (i + 1) * slice_size]
+            batches = []
+            for i in range(num_batches):
+                yield memory[i]
