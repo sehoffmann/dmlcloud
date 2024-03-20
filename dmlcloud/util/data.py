@@ -3,7 +3,7 @@ from typing import Iterable
 import numpy as np
 import torch.distributed as dist
 import xarray as xr
-from torch.utils.data import IterableDataset
+from torch.utils.data import get_worker_info, IterableDataset
 
 
 def shard_indices(
@@ -25,7 +25,6 @@ def sharded_xr_dataset(
     chunk_size: int,
     dim: str,
     shuffle: bool = False,
-    drop_remainder: bool = True,
     seed: int = 0,
     rank: int | None = None,
     world_size: int | None = None,
@@ -40,9 +39,7 @@ def sharded_xr_dataset(
     if world_size is None:
         world_size = dist.get_world_size(process_group)
 
-    chunk_indices = shard_indices(
-        num_chunks, rank, world_size, shuffle=shuffle, drop_remainder=drop_remainder, seed=seed
-    )
+    chunk_indices = shard_indices(num_chunks, rank, world_size, shuffle=shuffle, drop_remainder=True, seed=seed)
 
     for chunk_idx in chunk_indices:
         start = chunk_idx * chunk_size
@@ -60,7 +57,6 @@ class ShardedXrDataset(IterableDataset):
         chunk_size: int,
         dim: str,
         shuffle: bool = False,
-        drop_remainder: bool = True,
         seed: int = 0,
         rank: int | None = None,
         world_size: int | None = None,
@@ -71,7 +67,6 @@ class ShardedXrDataset(IterableDataset):
         self.chunk_size = chunk_size
         self.dim = dim
         self.shuffle = shuffle
-        self.drop_remainder = drop_remainder
         self.seed = seed
         self.load = load
 
@@ -85,15 +80,27 @@ class ShardedXrDataset(IterableDataset):
         else:
             self.world_size = world_size
 
+    def __len__(self):
+        num_total_elements = len(self.ds[self.dim])
+        num_chunks = num_total_elements // self.chunk_size
+        return num_chunks // self.world_size
+
     def __iter__(self):
+        worker_info = get_worker_info()
+        if worker_info is None:
+            rank = self.rank
+            world_size = self.world_size
+        else:
+            rank = self.rank * worker_info.num_workers + worker_info.id
+            world_size = self.world_size * worker_info.num_workers
+
         return sharded_xr_dataset(
             self.ds,
             self.chunk_size,
             self.dim,
             self.shuffle,
-            self.drop_remainder,
             self.seed,
-            self.rank,
-            self.world_size,
+            rank,
+            world_size,
             self.load,
         )
