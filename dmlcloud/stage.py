@@ -148,7 +148,8 @@ class Stage:
         for handler in self.logger.handlers:
             handler.flush()
 
-        self.table._print_header()
+        if is_root():
+            self.table._print_header()
 
     def _post_stage(self):
         self.stop_time = datetime.now()
