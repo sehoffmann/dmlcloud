@@ -231,7 +231,7 @@ class MetricTracker:
 
     def track(self, name, value):
         if isinstance(value, torch.Tensor):
-            value = value.detach().cpu()
+            value = value.detach().to('cpu', non_blocking=True)
 
         if name not in self:
             raise ValueError(f'Metric {name} does not exist')
