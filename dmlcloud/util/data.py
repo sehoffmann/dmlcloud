@@ -47,7 +47,7 @@ def sharded_xr_dataset(
         start = chunk_idx * chunk_size
         end = start + chunk_size
         chunk = ds.isel({dim: slice(start, end)})
-        
+
         if load:
             kwargs = load_kwargs or {}
             chunk.load(**kwargs)
@@ -123,7 +123,7 @@ def interleave_batches(
     """
     if num_batches < 1:
         raise ValueError('num_batches must be greater than 0')
-    
+
     if num_batches == 1:
         yield from iterable
 

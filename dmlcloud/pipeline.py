@@ -70,7 +70,7 @@ class TrainingPipeline:
 
         if verbose:
             msg = f'Model "{name}":\n'
-            msg += f'    - Parameters: {sum(p.numel() for p in model.parameters())/1e6:.1f} kk\n'
+            msg += f'    - Parameters: {sum(p.numel() for p in model.parameters()) / 1e6:.1f} kk\n'
             msg += f'    - DDP: {use_ddp}\n'
             msg += f'    - {model}'
             self.logger.info(msg)
@@ -231,7 +231,7 @@ class TrainingPipeline:
             self._resume_run()
 
         diagnostics = general_diagnostics()
-        diagnostics += '\n* CONFIG:\n' 
+        diagnostics += '\n* CONFIG:\n'
         diagnostics += '\n'.join(f'    {line}' for line in OmegaConf.to_yaml(self.config, resolve=True).splitlines())
         self.logger.info(diagnostics)
 
