@@ -8,23 +8,34 @@ from torch.utils.data import get_worker_info, IterableDataset
 
 
 def shard_indices(
-    n: int, rank: int, world_size: int, shuffle: bool = False, drop_remainder: bool = True, seed: int = 0
+    num_elements: int,
+    rank: int,
+    world_size: int,
+    shuffle: bool = False,
+    even_shards: bool = True,
+    seed: int = 0,
 ) -> list[int]:
-    indices = np.arange(n)
+    """
+    even_shards: If True, every worker receives the same number of shards, and the last shards are dropped.
+    """
+    indices = np.arange(num_elements)
 
     if shuffle:
         np.random.Generator(np.random.MT19937(seed)).shuffle(indices)
 
-    if drop_remainder:
-        indices = indices[: n - n % world_size]
+    if even_shards:
+        indices = indices[: num_elements - num_elements % world_size]
 
     return indices[rank::world_size].tolist()  # this also converts np.int64 to python's int
 
 
 def sharded_xr_dataset(
     ds: xr.Dataset | xr.DataArray,
-    chunk_size: int,
     dim: str,
+    chunk_size: int,
+    chunk_overlap: int = 0,
+    even_shards: bool = True,
+    equal_chunks: bool = True,
     shuffle: bool = False,
     seed: int = 0,
     rank: int | None = None,
@@ -34,18 +45,22 @@ def sharded_xr_dataset(
     load_kwargs: dict | None = None,
 ) -> Iterable[xr.Dataset | xr.DataArray]:
     num_total_elements = len(ds[dim])
-    num_chunks = num_total_elements // chunk_size
+
+    if equal_chunks:
+        num_chunks = num_total_elements // chunk_size
+    else:
+        num_chunks = (num_total_elements + chunk_size - 1) // chunk_size
 
     if rank is None:
         rank = dist.get_rank(process_group)
     if world_size is None:
         world_size = dist.get_world_size(process_group)
 
-    chunk_indices = shard_indices(num_chunks, rank, world_size, shuffle=shuffle, drop_remainder=True, seed=seed)
+    chunk_indices = shard_indices(num_chunks, rank, world_size, shuffle=shuffle, even_shards=even_shards, seed=seed)
 
     for chunk_idx in chunk_indices:
         start = chunk_idx * chunk_size
-        end = start + chunk_size
+        end = start + chunk_size + chunk_overlap
         chunk = ds.isel({dim: slice(start, end)})
 
         if load:
@@ -59,8 +74,11 @@ class ShardedXrDataset(IterableDataset):
     def __init__(
         self,
         ds: xr.Dataset | xr.DataArray,
-        chunk_size: int,
         dim: str,
+        chunk_size: int,
+        chunk_overlap: int = 0,
+        even_shards: bool = True,
+        equal_chunks: bool = True,
         shuffle: bool = False,
         seed: int = 0,
         rank: int | None = None,
@@ -70,27 +88,18 @@ class ShardedXrDataset(IterableDataset):
         load_kwargs: dict | None = None,
     ):
         self.ds = ds
-        self.chunk_size = chunk_size
         self.dim = dim
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.even_shards = even_shards
+        self.equal_chunks = equal_chunks
         self.shuffle = shuffle
         self.seed = seed
         self.load = load
         self.load_kwargs = load_kwargs
 
-        if rank is None:
-            self.rank = dist.get_rank(process_group)
-        else:
-            self.rank = rank
-
-        if world_size is None:
-            self.world_size = dist.get_world_size(process_group)
-        else:
-            self.world_size = world_size
-
-    def __len__(self):
-        num_total_elements = len(self.ds[self.dim])
-        num_chunks = num_total_elements // self.chunk_size
-        return num_chunks // self.world_size
+        self.rank = rank if rank is not None else dist.get_rank(process_group)
+        self.world_size = world_size if world_size is not None else dist.get_world_size(process_group)
 
     def __iter__(self):
         worker_info = get_worker_info()
@@ -103,8 +112,11 @@ class ShardedXrDataset(IterableDataset):
 
         return sharded_xr_dataset(
             self.ds,
-            self.chunk_size,
             self.dim,
+            self.chunk_size,
+            self.chunk_overlap,
+            self.even_shards,
+            self.equal_chunks,
             self.shuffle,
             self.seed,
             rank,

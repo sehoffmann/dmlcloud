@@ -1,4 +1,5 @@
 import sys
+from functools import partial
 
 import numpy as np
 import pytest
@@ -21,32 +22,32 @@ class _Unzip(IterableDataset):
 
 class TestSharding:
     def test_types(self):
-        indices = shard_indices(10, 0, 2, shuffle=False, drop_remainder=False)
+        indices = shard_indices(10, 0, 2, shuffle=False, even_shards=False)
         assert isinstance(indices, list)
         assert all(isinstance(i, int) for i in indices)
 
     def test_even(self):
-        assert shard_indices(10, 0, 2, shuffle=False, drop_remainder=False) == [0, 2, 4, 6, 8]
-        assert shard_indices(10, 1, 2, shuffle=False, drop_remainder=False) == [1, 3, 5, 7, 9]
+        assert shard_indices(10, 0, 2, shuffle=False, even_shards=False) == [0, 2, 4, 6, 8]
+        assert shard_indices(10, 1, 2, shuffle=False, even_shards=False) == [1, 3, 5, 7, 9]
 
     def test_uneven(self):
-        assert shard_indices(10, 0, 3, shuffle=False, drop_remainder=False) == [0, 3, 6, 9]
-        assert shard_indices(10, 1, 3, shuffle=False, drop_remainder=False) == [1, 4, 7]
-        assert shard_indices(10, 2, 3, shuffle=False, drop_remainder=False) == [2, 5, 8]
+        assert shard_indices(10, 0, 3, shuffle=False, even_shards=False) == [0, 3, 6, 9]
+        assert shard_indices(10, 1, 3, shuffle=False, even_shards=False) == [1, 4, 7]
+        assert shard_indices(10, 2, 3, shuffle=False, even_shards=False) == [2, 5, 8]
 
-        assert shard_indices(11, 0, 2, shuffle=False, drop_remainder=False) == [0, 2, 4, 6, 8, 10]
-        assert shard_indices(11, 1, 2, shuffle=False, drop_remainder=False) == [1, 3, 5, 7, 9]
+        assert shard_indices(11, 0, 2, shuffle=False, even_shards=False) == [0, 2, 4, 6, 8, 10]
+        assert shard_indices(11, 1, 2, shuffle=False, even_shards=False) == [1, 3, 5, 7, 9]
 
     def test_dropping(self):
-        assert shard_indices(10, 0, 3, shuffle=False, drop_remainder=True) == [0, 3, 6]
-        assert shard_indices(10, 1, 3, shuffle=False, drop_remainder=True) == [1, 4, 7]
-        assert shard_indices(10, 2, 3, shuffle=False, drop_remainder=True) == [2, 5, 8]
+        assert shard_indices(10, 0, 3, shuffle=False, even_shards=True) == [0, 3, 6]
+        assert shard_indices(10, 1, 3, shuffle=False, even_shards=True) == [1, 4, 7]
+        assert shard_indices(10, 2, 3, shuffle=False, even_shards=True) == [2, 5, 8]
 
-        assert shard_indices(11, 0, 2, shuffle=False, drop_remainder=True) == [0, 2, 4, 6, 8]
-        assert shard_indices(11, 1, 2, shuffle=False, drop_remainder=True) == [1, 3, 5, 7, 9]
+        assert shard_indices(11, 0, 2, shuffle=False, even_shards=True) == [0, 2, 4, 6, 8]
+        assert shard_indices(11, 1, 2, shuffle=False, even_shards=True) == [1, 3, 5, 7, 9]
 
     def test_shuffling(self):
-        indices = shard_indices(10, 0, 2, shuffle=True, drop_remainder=False, seed=0)
+        indices = shard_indices(10, 0, 2, shuffle=True, even_shards=False, seed=0)
         assert len(indices) == 5
         assert len(np.unique(indices)) == 5
         assert indices != list(sorted(indices))
@@ -59,9 +60,10 @@ class TestShardedXr:
         world_size = 3
         chunk_size = 15
 
-        chunks_1 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=0, shuffle=False))
-        chunks_2 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=1, shuffle=False))
-        chunks_3 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=2, shuffle=False))
+        shard = partial(sharded_xr_dataset, ds, 'x', chunk_size, world_size=world_size, shuffle=False)
+        chunks_1 = list(shard(rank=0))
+        chunks_2 = list(shard(rank=1))
+        chunks_3 = list(shard(rank=2))
 
         assert len(chunks_1) == 2
         assert len(chunks_2) == 2
@@ -82,6 +84,68 @@ class TestShardedXr:
         assert_array_equal(chunks_1[1]['var'], np.arange(45, 60))
         assert_array_equal(chunks_2[1]['var'], np.arange(60, 75))
         assert_array_equal(chunks_3[1]['var'], np.arange(75, 90))
+
+    def test_uneven(self):
+        ds = xr.DataArray(np.arange(100), dims=['x'], name='var').to_dataset()
+        world_size = 3
+        chunk_size = 20
+
+        shard = partial(
+            sharded_xr_dataset, ds, 'x', chunk_size, even_shards=False, world_size=world_size, shuffle=False
+        )
+        chunks_1 = list(shard(rank=0))
+        chunks_2 = list(shard(rank=1))
+        chunks_3 = list(shard(rank=2))
+
+        assert len(chunks_1) == 2
+        assert len(chunks_2) == 2
+        assert len(chunks_3) == 1
+
+        assert isinstance(chunks_1[0], xr.Dataset)
+
+        assert chunks_1[0].x.size == 20
+        assert chunks_1[1].x.size == 20
+        assert chunks_2[0].x.size == 20
+        assert chunks_2[1].x.size == 20
+        assert chunks_3[0].x.size == 20
+
+        assert_array_equal(chunks_1[0]['var'], np.arange(0, 20))
+        assert_array_equal(chunks_2[0]['var'], np.arange(20, 40))
+        assert_array_equal(chunks_3[0]['var'], np.arange(40, 60))
+        assert_array_equal(chunks_1[1]['var'], np.arange(60, 80))
+        assert_array_equal(chunks_2[1]['var'], np.arange(80, 100))
+
+    def test_unequal(self):
+        ds = xr.DataArray(np.arange(110), dims=['x'], name='var').to_dataset()
+        world_size = 3
+        chunk_size = 20
+
+        shard = partial(
+            sharded_xr_dataset, ds, 'x', chunk_size, equal_chunks=False, world_size=world_size, shuffle=False
+        )
+        chunks_1 = list(shard(rank=0))
+        chunks_2 = list(shard(rank=1))
+        chunks_3 = list(shard(rank=2))
+
+        assert len(chunks_1) == 2
+        assert len(chunks_2) == 2
+        assert len(chunks_3) == 2
+
+        assert isinstance(chunks_1[0], xr.Dataset)
+
+        assert chunks_1[0].x.size == 20
+        assert chunks_1[1].x.size == 20
+        assert chunks_2[0].x.size == 20
+        assert chunks_2[1].x.size == 20
+        assert chunks_3[0].x.size == 20
+        assert chunks_3[1].x.size == 10
+
+        assert_array_equal(chunks_1[0]['var'], np.arange(0, 20))
+        assert_array_equal(chunks_2[0]['var'], np.arange(20, 40))
+        assert_array_equal(chunks_3[0]['var'], np.arange(40, 60))
+        assert_array_equal(chunks_1[1]['var'], np.arange(60, 80))
+        assert_array_equal(chunks_2[1]['var'], np.arange(80, 100))
+        assert_array_equal(chunks_3[1]['var'], np.arange(100, 110))
 
     def test_shuffled(self):
         ds = xr.DataArray(np.arange(100), dims=['x'], name='var').to_dataset()
@@ -297,33 +361,83 @@ class TestShardedXr:
             59,
         ]
 
-    def test_XrShardedDataset_length(self):
+    def test_overlap(self):
         ds = xr.DataArray(np.arange(100), dims=['x'], name='var').to_dataset()
+        world_size = 3
         chunk_size = 15
+        overlap = 5
 
-        torch_ds = ShardedXrDataset(ds, chunk_size, 'x', world_size=1, rank=0, shuffle=False)
-        assert len(torch_ds) == 6
+        shard = partial(
+            sharded_xr_dataset, ds, 'x', chunk_size, chunk_overlap=overlap, world_size=world_size, shuffle=False
+        )
 
-        torch_ds1 = ShardedXrDataset(ds, chunk_size, 'x', world_size=2, rank=0, shuffle=False)
-        torch_ds2 = ShardedXrDataset(ds, chunk_size, 'x', world_size=2, rank=1, shuffle=False)
-        assert len(torch_ds1) == 3
-        assert len(torch_ds2) == 3
+        chunks_1 = list(shard(rank=0))
+        chunks_2 = list(shard(rank=1))
+        chunks_3 = list(shard(rank=2))
 
-        torch_ds1 = ShardedXrDataset(ds, chunk_size, 'x', world_size=3, rank=0, shuffle=False)
-        torch_ds2 = ShardedXrDataset(ds, chunk_size, 'x', world_size=3, rank=1, shuffle=False)
-        torch_ds3 = ShardedXrDataset(ds, chunk_size, 'x', world_size=3, rank=2, shuffle=False)
-        assert len(torch_ds1) == 2
-        assert len(torch_ds2) == 2
-        assert len(torch_ds3) == 2
+        assert len(chunks_1) == 2
+        assert len(chunks_2) == 2
+        assert len(chunks_3) == 2
 
-        torch_ds1 = ShardedXrDataset(ds, chunk_size, 'x', world_size=4, rank=0, shuffle=False)
-        torch_ds2 = ShardedXrDataset(ds, chunk_size, 'x', world_size=4, rank=1, shuffle=False)
-        torch_ds3 = ShardedXrDataset(ds, chunk_size, 'x', world_size=4, rank=2, shuffle=False)
-        torch_ds4 = ShardedXrDataset(ds, chunk_size, 'x', world_size=4, rank=3, shuffle=False)
-        assert len(torch_ds1) == 1
-        assert len(torch_ds2) == 1
-        assert len(torch_ds3) == 1
-        assert len(torch_ds4) == 1
+        assert isinstance(chunks_1[0], xr.Dataset)
+
+        assert chunks_1[0].x.size == 20
+        assert chunks_1[1].x.size == 20
+        assert chunks_2[0].x.size == 20
+        assert chunks_2[1].x.size == 20
+        assert chunks_3[0].x.size == 20
+        assert chunks_3[1].x.size == 20
+
+        assert_array_equal(chunks_1[0]['var'], np.arange(0, 20))
+        assert_array_equal(chunks_2[0]['var'], np.arange(15, 35))
+        assert_array_equal(chunks_3[0]['var'], np.arange(30, 50))
+        assert_array_equal(chunks_1[1]['var'], np.arange(45, 65))
+        assert_array_equal(chunks_2[1]['var'], np.arange(60, 80))
+        assert_array_equal(chunks_3[1]['var'], np.arange(75, 95))
+
+    def test_overlap_unequal_uneven(self):
+        ds = xr.DataArray(np.arange(100), dims=['x'], name='var').to_dataset()
+        world_size = 3
+        chunk_size = 15
+        overlap = 5
+
+        shard = partial(
+            sharded_xr_dataset,
+            ds,
+            'x',
+            chunk_size,
+            chunk_overlap=overlap,
+            even_shards=False,
+            equal_chunks=False,
+            world_size=world_size,
+            shuffle=False,
+        )
+
+        chunks_1 = list(shard(rank=0))
+        chunks_2 = list(shard(rank=1))
+        chunks_3 = list(shard(rank=2))
+
+        assert len(chunks_1) == 3
+        assert len(chunks_2) == 2
+        assert len(chunks_3) == 2
+
+        assert isinstance(chunks_1[0], xr.Dataset)
+
+        assert chunks_1[0].x.size == 20
+        assert chunks_1[1].x.size == 20
+        assert chunks_2[0].x.size == 20
+        assert chunks_2[1].x.size == 20
+        assert chunks_3[0].x.size == 20
+        assert chunks_3[1].x.size == 20
+        assert chunks_1[2].x.size == 10
+
+        assert_array_equal(chunks_1[0]['var'], np.arange(0, 20))
+        assert_array_equal(chunks_2[0]['var'], np.arange(15, 35))
+        assert_array_equal(chunks_3[0]['var'], np.arange(30, 50))
+        assert_array_equal(chunks_1[1]['var'], np.arange(45, 65))
+        assert_array_equal(chunks_2[1]['var'], np.arange(60, 80))
+        assert_array_equal(chunks_3[1]['var'], np.arange(75, 95))
+        assert_array_equal(chunks_1[2]['var'], np.arange(90, 100))
 
 
 class TestInterleaveBatches:
