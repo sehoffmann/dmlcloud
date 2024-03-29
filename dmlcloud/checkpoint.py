@@ -50,7 +50,7 @@ def find_slurm_checkpoint(root: Path | str) -> Optional[Path]:
 
 class CheckpointDir:
     def __init__(self, path: Path):
-        self.path = path.resolve()
+        self.path = Path(path).resolve()
         self.logger = logging.getLogger('dmlcloud')
 
     @property
