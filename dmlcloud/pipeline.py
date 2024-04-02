@@ -8,11 +8,11 @@ from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, Dataset
 
-from dmlcloud.util.wandb import wandb_is_initialized, wandb_set_startup_timeout
+from dmlcloud.util.wandb import wandb, wandb_is_initialized, wandb_set_startup_timeout
 from .checkpoint import CheckpointDir, find_slurm_checkpoint, generate_checkpoint_path
 from .metrics import MetricTracker, Reduction
 from .stage import Stage
-from .util.distributed import local_rank, root_only
+from .util.distributed import local_rank, root_only, is_root
 from .util.logging import add_log_handlers, experiment_header, general_diagnostics, IORedirector
 
 
@@ -131,7 +131,6 @@ class TrainingPipeline:
 
         self.checkpoint_dir = CheckpointDir(path)
 
-    @root_only
     def enable_wandb(
         self,
         project: str | None = None,
@@ -142,8 +141,6 @@ class TrainingPipeline:
         **kwargs,
     ):
         import wandb  # import now to avoid potential long import times later on
-
-        self.wandb = True
 
         @root_only
         def initializer():
@@ -159,6 +156,7 @@ class TrainingPipeline:
             )
 
         self._wandb_initalizer = initializer
+        self.wandb = True
 
     def track_reduce(
         self,
@@ -268,9 +266,7 @@ class TrainingPipeline:
         pass
 
     def _post_epoch(self):
-        if self.wandb:
-            import wandb
-
+        if self.wandb and is_root():
             metrics = {name: self.tracker[name][-1] for name in self.tracker}
             wandb.log(metrics)
 
@@ -285,11 +281,8 @@ class TrainingPipeline:
                 '------- Training failed with an exception -------', exc_info=(exc_type, exc_value, traceback)
             )
 
-        if self.wandb:
-            import wandb
-
-            if wandb_is_initialized():
-                wandb.finish(exit_code=0 if exc_type is None else 1)
+        if self.wandb and wandb_is_initialized():
+            wandb.finish(exit_code=0 if exc_type is None else 1)
 
         if self.io_redirector is not None:
             self.io_redirector.uninstall()
