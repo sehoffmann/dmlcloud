@@ -29,7 +29,7 @@ def generate_checkpoint_path(
     if creation_time is None:
         creation_time = datetime.datetime.now()
 
-    dt = datetime.datetime.now().strftime('%Y.%m.%d-%H:%M')
+    dt = datetime.datetime.now().strftime('%Y.%m.%d-%H.%M')
     name = sanitize_filename(name)
     return root / f'{name}-{dt}-{generate_id()}'
 
