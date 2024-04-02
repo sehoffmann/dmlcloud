@@ -136,6 +136,7 @@ class Stage:
             if self._stop_requested:
                 break
         self._post_stage()
+        dist.barrier()  # this will time out if not all processes reach this point
 
     def _pre_stage(self):
         self.start_time = datetime.now()
