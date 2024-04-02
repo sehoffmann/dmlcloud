@@ -12,7 +12,7 @@ from dmlcloud.util.wandb import wandb, wandb_is_initialized, wandb_set_startup_t
 from .checkpoint import CheckpointDir, find_slurm_checkpoint, generate_checkpoint_path
 from .metrics import MetricTracker, Reduction
 from .stage import Stage
-from .util.distributed import local_rank, root_only, is_root
+from .util.distributed import is_root, local_rank, root_only
 from .util.logging import add_log_handlers, experiment_header, general_diagnostics, IORedirector
 
 
