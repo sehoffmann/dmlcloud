@@ -152,9 +152,10 @@ class TestShardedXr:
         world_size = 3
         chunk_size = 15
 
-        chunks_1 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=0, shuffle=True, seed=0))
-        chunks_2 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=1, shuffle=True, seed=0))
-        chunks_3 = list(sharded_xr_dataset(ds, chunk_size, 'x', world_size=world_size, rank=2, shuffle=True, seed=0))
+        shard = partial(sharded_xr_dataset, ds, 'x', chunk_size, world_size=world_size, shuffle=True, seed=0)
+        chunks_1 = list(shard(rank=0))
+        chunks_2 = list(shard(rank=1))
+        chunks_3 = list(shard(rank=2))
 
         assert len(chunks_1) == 2
         assert len(chunks_2) == 2
