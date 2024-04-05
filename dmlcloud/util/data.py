@@ -124,6 +124,10 @@ class ShardedXrDataset(IterableDataset):
 
         self.rank = rank if rank is not None else dist.get_rank(process_group)
         self.world_size = world_size if world_size is not None else dist.get_world_size(process_group)
+        self._num_iters = 0
+
+    def set_epoch(self, epoch: int):
+        self._num_iters = epoch
 
     def __iter__(self):
         worker_info = get_worker_info()
@@ -138,15 +142,15 @@ class ShardedXrDataset(IterableDataset):
             self.ds,
             self.dim,
             self.chunk_size,
-            self.chunk_overlap,
-            self.even_shards,
-            self.equal_chunks,
-            self.shuffle,
-            self.seed,
-            rank,
-            world_size,
-            self.load,
-            self.load_kwargs,
+            chunk_overlap=self.chunk_overlap,
+            even_shards=self.even_shards,
+            equal_chunks=self.equal_chunks,
+            shuffle=self.shuffle,
+            seed=self.seed + self._num_iters,
+            rank=rank,
+            world_size=world_size,
+            load=self.load,
+            load_kwargs=self.load_kwargs,
         )
 
 
