@@ -225,6 +225,34 @@ class TrainValStage(Stage):
         super().__init__()
         self.is_train = True
 
+    def train_dataset(self):
+        train_ds = self.pipeline.datasets.get('train')
+        if train_ds is None:
+            raise ValueError(
+                'No "train" dataset found in pipeline. Use register_dataset("train", ...) to register a dataset.'
+            )
+        return train_ds
+
+    def val_dataset(self):
+        val_ds = self.pipeline.datasets.get('val')
+        if val_ds is None:
+            raise ValueError(
+                'No "val" dataset found in pipeline. Use register_dataset("val", ...) to register a dataset.'
+            )
+        return val_ds
+
+    def optimizers(self):
+        return self.pipeline.optimizers.values()
+
+    def loss_metric_name(self):
+        return 'loss'
+
+    def train_metric_prefix(self):
+        return 'train'
+
+    def val_metric_prefix(self):
+        return 'val'
+
     def run_epoch(self):
         self.train_epoch()
         self.val_epoch()
@@ -240,28 +268,23 @@ class TrainValStage(Stage):
 
     def train_epoch(self):
         self.is_train = True
-        self.metric_prefix = 'train'
+        self.metric_prefix = self.train_metric_prefix()
 
-        train_ds = self.pipeline.datasets.get('train')
-        if train_ds is None:
-            raise ValueError(
-                'No "train" dataset found in pipeline. Use register_dataset("train", ...) to register a dataset.'
-            )
-
+        train_ds = self.train_dataset()
         if hasattr(train_ds, 'sampler') and hasattr(train_ds.sampler, 'set_epoch'):
             train_ds.sampler.set_epoch(self.current_epoch)
 
         for batch in train_ds:
-            for optimizer in self.pipeline.optimizers.values():
+            for optimizer in self.optimizers():
                 optimizer.zero_grad()
 
             loss = self.train_step(batch)
             loss.backward()
 
-            for optimizer in self.pipeline.optimizers.values():
+            for optimizer in self.optimizers():
                 optimizer.step()
 
-            self.track_reduce('loss', loss)
+            self.track_reduce(self.loss_metric_name(), loss)
 
         for scheduler in self.pipeline.schedulers.values():
             scheduler.step()
@@ -269,20 +292,14 @@ class TrainValStage(Stage):
     @torch.no_grad()
     def val_epoch(self):
         self.is_train = False
-        self.metric_prefix = 'val'
+        self.metric_prefix = self.val_metric_prefix()
 
-        val_ds = self.pipeline.datasets.get('val')
-        if val_ds is None:
-            raise ValueError(
-                'No "val" dataset found in pipeline. Use register_dataset("val", ...) to register a dataset.'
-            )
-
-        for batch in val_ds:
+        for batch in self.val_dataset():
             loss = self.val_step(batch)
             self.track_reduce('loss', loss)
 
     def table_columns(self):
         columns = super().table_columns()
-        columns.insert(1, {'name': '[Train] Loss', 'metric': 'train/loss'})
-        columns.insert(2, {'name': '[Val] Loss', 'metric': 'val/loss'})
+        columns.insert(1, {'name': '[Train] Loss', 'metric': f'{self.train_metric_prefix()}/{self.loss_metric_name()}'})
+        columns.insert(2, {'name': '[Val] Loss', 'metric': f'{self.val_metric_prefix()}/{self.loss_metric_name()}'})
         return columns
