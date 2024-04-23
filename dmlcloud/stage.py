@@ -253,6 +253,9 @@ class TrainValStage(Stage):
     def val_metric_prefix(self):
         return 'val'
 
+    def gradient_clip(self):
+        return 0.0
+
     def run_epoch(self):
         self.train_epoch()
         self.val_epoch()
@@ -266,6 +269,24 @@ class TrainValStage(Stage):
     def val_step(self, batch):
         return self.step(batch)
 
+    def zero_grad(self):
+        for optimizer in self.optimizers():
+            optimizer.zero_grad()
+
+    def clip_gradients(self):
+        for optimizer in self.optimizers():
+            for group in optimizer.param_groups:
+                torch.nn.utils.clip_grad_norm_(group['params'], self.gradient_clip())
+
+    def optimize(self, loss):
+        loss.backward()
+
+        if self.gradient_clip():
+            self.clip_gradients()
+
+        for optimizer in self.optimizers():
+            optimizer.step()
+
     def train_epoch(self):
         self.is_train = True
         self.metric_prefix = self.train_metric_prefix()
@@ -275,15 +296,9 @@ class TrainValStage(Stage):
             train_ds.sampler.set_epoch(self.current_epoch)
 
         for batch in train_ds:
-            for optimizer in self.optimizers():
-                optimizer.zero_grad()
-
+            self.zero_grad()
             loss = self.train_step(batch)
-            loss.backward()
-
-            for optimizer in self.optimizers():
-                optimizer.step()
-
+            self.optimize(loss)
             self.track_reduce(self.loss_metric_name(), loss)
 
         for scheduler in self.pipeline.schedulers.values():
