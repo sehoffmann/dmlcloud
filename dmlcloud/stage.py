@@ -178,7 +178,7 @@ class Stage:
     def _reduce_metrics(self):
         self.track(name='misc/epoch', value=self.current_epoch, prefixed=False)
         self.track(
-            name='misc/epoch_time', value=(self.epoch_stop_time - self.epoch_stop_time).total_seconds(), prefixed=False
+            name='misc/epoch_time', value=(self.epoch_stop_time - self.epoch_start_time).total_seconds(), prefixed=False
         )
         self.tracker.next_epoch()
         pass
@@ -301,8 +301,10 @@ class TrainValStage(Stage):
             self.optimize(loss)
             self.track_reduce(self.loss_metric_name(), loss)
 
-        for scheduler in self.pipeline.schedulers.values():
+        for name, scheduler in self.pipeline.schedulers.items():
+            self.track(f'misc/lr_{name}', scheduler.get_last_lr()[0], prefixed=False)
             scheduler.step()
+            
 
     @torch.no_grad()
     def val_epoch(self):
