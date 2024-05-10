@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence, Union
+import warnings
 
 import torch
 import torch.distributed as dist
@@ -12,7 +13,7 @@ from dmlcloud.util.wandb import wandb, wandb_is_initialized, wandb_set_startup_t
 from .checkpoint import CheckpointDir, find_slurm_checkpoint, generate_checkpoint_path
 from .metrics import MetricTracker, Reduction
 from .stage import Stage
-from .util.distributed import is_root, local_rank, root_only
+from .util.distributed import is_root, local_rank, root_only, all_gather_object, broadcast_object
 from .util.logging import add_log_handlers, experiment_header, general_diagnostics, IORedirector
 
 
@@ -127,9 +128,8 @@ class TrainingPipeline:
             self.resumed = True
 
         if path is None:  # no need for a barrier here, dir creation happens in _pre_run()
-            obj_list = [generate_checkpoint_path(root=root, name=self.name, creation_time=self.start_time)]
-            dist.broadcast_object_list(obj_list)
-            path = obj_list[0]
+            path = generate_checkpoint_path(root=root, name=self.name, creation_time=self.start_time)
+            path = broadcast_object(path)
             self.resumed = False
 
         self.checkpoint_dir = CheckpointDir(path)
@@ -216,10 +216,13 @@ class TrainingPipeline:
 
         if torch.cuda.is_available():
             if local_rank() is None:
+                warnings.warn('CUDA is available but no local rank found. Make sure to set CUDA_VISIBLE_DEVICES manually for each rank.')
                 self.device = torch.device('cuda')
             else:
                 self.device = torch.device('cuda', local_rank())
+                torch.cuda.set_device(local_rank())
         else:
+            warnings.warn('CUDA is not available. Running on CPU.')
             self.device = torch.device('cpu')
 
         dist.barrier()  # important to prevent checkpoint dir creation before all processes searched for it
@@ -240,8 +243,14 @@ class TrainingPipeline:
             self._resume_run()
 
         diagnostics = general_diagnostics()
+        
+        diagnostics += '\n* DEVICES:\n'
+        devices = all_gather_object(str(self.device))
+        diagnostics += '\n'.join(f'    - [Rank {i}] {device}' for i, device in enumerate(devices))
+        
         diagnostics += '\n* CONFIG:\n'
         diagnostics += '\n'.join(f'    {line}' for line in OmegaConf.to_yaml(self.config, resolve=True).splitlines())
+        
         self.logger.info(diagnostics)
 
         self.pre_run()

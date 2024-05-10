@@ -113,6 +113,27 @@ def print_root(msg, flush=True):
     print(msg, flush=flush)
 
 
+def all_gather_object(obj, group=None):
+    outlist = [None for _ in range(dist.get_world_size(group))]
+    dist.all_gather_object(outlist, obj, group=group)
+    return outlist
+
+
+def gather_object(obj, dst=0, group=None):
+    if dist.get_rank() == dst:
+        outlist = [None for _ in range(dist.get_world_size(group))]
+    else:
+        outlist = None
+    dist.gather_object(obj, outlist, dst=dst, group=group)
+    return outlist
+
+
+def broadcast_object(obj, src=0, group=None, device=None):
+    objlist = [obj]
+    dist.broadcast_object(objlist, src=src, group=group, device=None)
+    return obj
+
+
 def init_process_group_dummy(**kwargs):
     """
     Initializes the process group with a single process.
