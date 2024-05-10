@@ -265,9 +265,10 @@ class MetricTracker:
                 else:
                     continue
 
-            if name in self.reducers:
-                history.append(self.reducers[name].reduce_globally())
-                self.reducers[name].clear()
+            reducer = self.reducers.get(name)
+            if reducer is not None:
+                history.append(reducer.reduce_globally())
+                reducer.clear()
             else:
                 history.append(None)
 
