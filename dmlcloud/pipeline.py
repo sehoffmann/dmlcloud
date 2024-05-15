@@ -1,7 +1,7 @@
 import logging
+import warnings
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Union
-import warnings
 
 import torch
 import torch.distributed as dist
@@ -13,7 +13,7 @@ from dmlcloud.util.wandb import wandb, wandb_is_initialized, wandb_set_startup_t
 from .checkpoint import CheckpointDir, find_slurm_checkpoint, generate_checkpoint_path
 from .metrics import MetricTracker, Reduction
 from .stage import Stage
-from .util.distributed import is_root, local_rank, root_only, all_gather_object, broadcast_object
+from .util.distributed import all_gather_object, broadcast_object, is_root, local_rank, root_only
 from .util.logging import add_log_handlers, experiment_header, general_diagnostics, IORedirector
 
 
@@ -67,10 +67,12 @@ class TrainingPipeline:
         if name in self.models:
             raise ValueError(f'Model with name {name} already exists')
         model = model.to(self.device)  # Doing it in this order is important for SyncBN
-        if sync_bn:   
+        if sync_bn:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         if use_ddp:
-            model = DistributedDataParallel(model, broadcast_buffers=False, device_ids=[self.device], output_device=self.device)
+            model = DistributedDataParallel(
+                model, broadcast_buffers=False, device_ids=[self.device], output_device=self.device
+            )
         self.models[name] = model
 
         if verbose:
@@ -221,16 +223,17 @@ class TrainingPipeline:
             raise ValueError(
                 'Default process group not initialized! Call torch.distributed.init_process_group() first.'
             )
-        
+
         if dist.is_gloo_available():
             self.gloo_group = dist.new_group(backend='gloo')
         else:
             warnings.warn('Gloo backend not available. Barriers will not use custom timeouts.')
-            
 
         if torch.cuda.is_available():
             if local_rank() is None:
-                warnings.warn('CUDA is available but no local rank found. Make sure to set CUDA_VISIBLE_DEVICES manually for each rank.')
+                warnings.warn(
+                    'CUDA is available but no local rank found. Make sure to set CUDA_VISIBLE_DEVICES manually for each rank.'
+                )
                 self.device = torch.device('cuda')
             else:
                 self.device = torch.device('cuda', local_rank())
@@ -239,14 +242,16 @@ class TrainingPipeline:
             warnings.warn('CUDA is not available. Running on CPU.')
             self.device = torch.device('cpu')
 
-        self.barrier(timeout=10*60)  # important to prevent checkpoint dir creation before all processes searched for it
+        self.barrier(
+            timeout=10 * 60
+        )  # important to prevent checkpoint dir creation before all processes searched for it
         if self.checkpointing_enabled:
             self._init_checkpointing()
 
         if self.wandb:
             self._wandb_initalizer()
 
-        self.barrier(timeout=10*60)  # make sure everything is set up before starting the run
+        self.barrier(timeout=10 * 60)  # make sure everything is set up before starting the run
         self.start_time = datetime.now()
 
         add_log_handlers(self.logger)
@@ -257,14 +262,14 @@ class TrainingPipeline:
             self._resume_run()
 
         diagnostics = general_diagnostics()
-        
+
         diagnostics += '\n* DEVICES:\n'
         devices = all_gather_object(str(self.device))
         diagnostics += '\n'.join(f'    - [Rank {i}] {device}' for i, device in enumerate(devices))
-        
+
         diagnostics += '\n* CONFIG:\n'
         diagnostics += '\n'.join(f'    {line}' for line in OmegaConf.to_yaml(self.config, resolve=True).splitlines())
-        
+
         self.logger.info(diagnostics)
 
         self.pre_run()

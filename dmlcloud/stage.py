@@ -1,10 +1,9 @@
 import sys
-from datetime import datetime
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 import torch
-import torch.distributed as dist
 from progress_table import ProgressTable
 
 from .metrics import MetricTracker, Reduction
@@ -304,13 +303,18 @@ class TrainValStage(Stage):
 
             self.track_reduce(self.loss_metric_name(), loss)
             self.track_reduce('misc/total_train_batches', torch.tensor(1), reduction=Reduction.SUM, prefixed=False)
-            self.track_reduce('misc/worker_train_batches', torch.tensor(1), reduction=Reduction.SUM, reduce_globally=False, prefixed=False)
-            self.track_reduce('misc/step_time_ms', torch.tensor(step_end_time-step_start_time)/1e6, prefixed=False)
+            self.track_reduce(
+                'misc/worker_train_batches',
+                torch.tensor(1),
+                reduction=Reduction.SUM,
+                reduce_globally=False,
+                prefixed=False,
+            )
+            self.track_reduce('misc/step_time_ms', torch.tensor(step_end_time - step_start_time) / 1e6, prefixed=False)
 
         for name, scheduler in self.pipeline.schedulers.items():
             self.track(f'misc/lr_{name}', scheduler.get_last_lr()[0], prefixed=False)
             scheduler.step()
-            
 
     @torch.no_grad()
     def val_epoch(self):
@@ -321,8 +325,13 @@ class TrainValStage(Stage):
             loss = self.val_step(batch)
             self.track_reduce(self.loss_metric_name(), loss)
             self.track_reduce('misc/total_val_batches', torch.tensor(1), reduction=Reduction.SUM, prefixed=False)
-            self.track_reduce('misc/worker_val_batches', torch.tensor(1), reduction=Reduction.SUM, reduce_globally=False, prefixed=False)
-
+            self.track_reduce(
+                'misc/worker_val_batches',
+                torch.tensor(1),
+                reduction=Reduction.SUM,
+                reduce_globally=False,
+                prefixed=False,
+            )
 
     def table_columns(self):
         columns = super().table_columns()

@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from typing import Iterable, Sequence
 
 import numpy as np
@@ -5,7 +6,6 @@ import torch
 import torch.distributed as dist
 import xarray as xr
 from torch.utils.data import get_worker_info, IterableDataset
-from concurrent.futures import ThreadPoolExecutor
 
 
 def shard_indices(
@@ -108,7 +108,6 @@ def sharded_xr_dataset(
 
 
 class ShardedSequenceDataset(IterableDataset):
-
     def __init__(
         self,
         sequence: Sequence,
@@ -137,7 +136,14 @@ class ShardedSequenceDataset(IterableDataset):
         else:
             rank = self.rank * worker_info.num_workers + worker_info.id
             world_size = self.world_size * worker_info.num_workers
-        shards = shard_sequence(self.sequence, rank, world_size, shuffle=self.shuffle, even_shards=self.even_shards, seed=self.seed + self.epoch)
+        shards = shard_sequence(
+            self.sequence,
+            rank,
+            world_size,
+            shuffle=self.shuffle,
+            even_shards=self.even_shards,
+            seed=self.seed + self.epoch,
+        )
         return iter(shards)
 
 
@@ -200,8 +206,8 @@ class ShardedXrDataset(IterableDataset):
             load_kwargs=self.load_kwargs,
         )
 
-class DownstreamDataset(IterableDataset):
 
+class DownstreamDataset(IterableDataset):
     def __init__(self, source_ds: Iterable[xr.Dataset]):
         self.source_ds = source_ds
 
@@ -217,11 +223,11 @@ class PrefetchDataset(DownstreamDataset):
     def __init__(self, source_ds: Iterable, num_elements: int):
         super().__init__(source_ds)
         self.num_elements = num_elements
-    
+
     def __iter__(self):
         pool = ThreadPoolExecutor(max_workers=1)
         iter_ = iter(self.source_ds)
-        
+
         with pool:
             futures = [pool.submit(next, iter_) for _ in range(self.num_elements)]
             while True:
@@ -235,7 +241,6 @@ class PrefetchDataset(DownstreamDataset):
 
 
 class BatchDataset(DownstreamDataset):
-
     def __init__(self, source_ds: Iterable, batch_size: int, drop_remainder: bool = False):
         super().__init__(source_ds)
         self.batch_size = batch_size

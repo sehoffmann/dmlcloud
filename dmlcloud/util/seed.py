@@ -1,7 +1,7 @@
 import random
 
-import torch
 import numpy as np
+import torch
 
 
 def seed_all(seed: int):

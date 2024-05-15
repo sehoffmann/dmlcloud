@@ -9,6 +9,7 @@ from .tcp import find_free_port, get_local_ips
 
 DEFAULT_PORT = os.environ.get('DMLCLOUD_PORT', 41312)  # dml
 
+
 class _WorkerInfo:
     INIT_METHOD = None
     RANK = None
@@ -16,7 +17,6 @@ class _WorkerInfo:
     LOCAL_RANK = None
     LOCAL_WORLD_SIZE = None
     NODE_ID = None
-    
 
 
 def has_slurm():
@@ -29,7 +29,8 @@ def has_environment():
 
 def has_mpi():
     try:
-        from mpi4py import MPI
+        from mpi4py import MPI  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -83,14 +84,18 @@ def mpi_local_comm():
 def rank():
     return _WorkerInfo.RANK
 
+
 def world_size():
     return _WorkerInfo.WORLD_SIZE
+
 
 def local_rank():
     return _WorkerInfo.LOCAL_RANK
 
+
 def local_world_size():
     return _WorkerInfo.LOCAL_WORLD_SIZE
+
 
 def local_node():
     return _WorkerInfo.NODE_ID
@@ -172,7 +177,6 @@ def init_process_group_slurm(port=DEFAULT_PORT, **kwargs):
     )
 
 
-
 def init_process_group_MPI(ip_idx=0, port=DEFAULT_PORT, **kwargs):
     """
     This method setups up the distributed backend using MPI, even
@@ -220,7 +224,6 @@ def init_process_group_MPI(ip_idx=0, port=DEFAULT_PORT, **kwargs):
     )
 
 
-
 def init_process_group_auto(verbose=True, **kwargs):
     """
     Tries to initialize torch.distributed in the following order:
@@ -247,10 +250,10 @@ def deinitialize_torch_distributed():
     At the time of writing, `dist.destroy_process_group()` is not well documented.
     Hence, this function.
     """
-    _WorkerInfo.INIT_METHOD=None
-    _WorkerInfo.RANK=None
-    _WorkerInfo.WORLD_SIZE=None
-    _WorkerInfo.LOCAL_RANK=None
-    _WorkerInfo.LOCAL_WORLD_SIZE=None
-    _WorkerInfo.NODE_ID=None
+    _WorkerInfo.INIT_METHOD = None
+    _WorkerInfo.RANK = None
+    _WorkerInfo.WORLD_SIZE = None
+    _WorkerInfo.LOCAL_RANK = None
+    _WorkerInfo.LOCAL_WORLD_SIZE = None
+    _WorkerInfo.NODE_ID = None
     dist.destroy_process_group()
