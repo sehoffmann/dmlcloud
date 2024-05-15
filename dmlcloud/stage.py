@@ -320,7 +320,7 @@ class TrainValStage(Stage):
 
         for batch in self.val_dataset():
             loss = self.val_step(batch)
-            self.track_reduce('loss', loss)
+            self.track_reduce(self.loss_metric_name(), loss)
             self.track_reduce('misc/total_val_batches', torch.tensor(1), reduction=Reduction.SUM, prefixed=False)
             self.track_reduce('misc/worker_val_batches', torch.tensor(1), reduction=Reduction.SUM, reduce_globally=False, prefixed=False)
 

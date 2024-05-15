@@ -130,8 +130,8 @@ def gather_object(obj, dst=0, group=None):
 
 def broadcast_object(obj, src=0, group=None, device=None):
     objlist = [obj]
-    dist.broadcast_object(objlist, src=src, group=group, device=None)
-    return obj
+    dist.broadcast_object_list(objlist, src=src, group=group, device=None)
+    return objlist[0]
 
 
 def init_process_group_dummy(**kwargs):
