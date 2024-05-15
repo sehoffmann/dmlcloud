@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Union
 import warnings
 
@@ -30,6 +30,7 @@ class TrainingPipeline:
 
         self.logger = logging.getLogger('dmlcloud')
         self.checkpoint_dir = None
+        self.gloo_group = None
         self.io_redirector = None
         self.resumed = None
         self.tracker = MetricTracker()
@@ -186,6 +187,13 @@ class TrainingPipeline:
 
         self.tracker.track(name, value)
 
+    def barrier(self, timeout=None):
+        if self.gloo_group is None:
+            dist.barrier()
+        else:
+            timeout = timedelta(seconds=timeout) if timeout is not None else None
+            dist.monitored_barrier(self.gloo_group, timeout=timeout, wait_all_ranks=True)
+
     def run(self):
         """
         Starts the training and runs all registered stages.
@@ -213,6 +221,12 @@ class TrainingPipeline:
             raise ValueError(
                 'Default process group not initialized! Call torch.distributed.init_process_group() first.'
             )
+        
+        if dist.is_gloo_available():
+            self.gloo_group = dist.new_group(backend='gloo')
+        else:
+            warnings.warn('Gloo backend not available. Barriers will not use custom timeouts.')
+            
 
         if torch.cuda.is_available():
             if local_rank() is None:
@@ -225,14 +239,14 @@ class TrainingPipeline:
             warnings.warn('CUDA is not available. Running on CPU.')
             self.device = torch.device('cpu')
 
-        dist.barrier()  # important to prevent checkpoint dir creation before all processes searched for it
+        self.barrier(timeout=10*60)  # important to prevent checkpoint dir creation before all processes searched for it
         if self.checkpointing_enabled:
             self._init_checkpointing()
 
         if self.wandb:
             self._wandb_initalizer()
 
-        dist.barrier()  # make sure everything is set up before starting the run
+        self.barrier(timeout=10*60)  # make sure everything is set up before starting the run
         self.start_time = datetime.now()
 
         add_log_handlers(self.logger)

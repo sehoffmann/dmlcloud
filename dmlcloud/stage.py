@@ -34,6 +34,7 @@ class Stage:
 
         self.metric_prefix = None
         self.table = None
+        self.barrier_timeout = None
 
     @property
     def tracker(self) -> MetricTracker:
@@ -129,7 +130,6 @@ class Stage:
         Runs this stage. Either until max_epochs are reached, or until stop_stage() is called.
         """
         self._pre_stage()
-        dist.barrier()
         while self.max_epochs is None or self.current_epoch <= self.max_epochs:
             self._pre_epoch()
             self.run_epoch()
@@ -137,13 +137,11 @@ class Stage:
             if self._stop_requested:
                 break
         self._post_stage()
-        dist.barrier()  # this will time out if not all processes reach this point
 
     def _pre_stage(self):
         self.start_time = datetime.now()
         self.table = ProgressTable(file=sys.stdout)
         self._setup_table()
-
         if len(self.pipeline.stages) > 1:
             self.logger.info(f'\n========== STAGE: {self.name} ==========')
 
@@ -151,17 +149,18 @@ class Stage:
 
         for handler in self.logger.handlers:
             handler.flush()
-
         if is_root():
             self.table._print_header()
+        self.pipeline.barrier(self.barrier_timeout)
 
     def _post_stage(self):
-        self.stop_time = datetime.now()
         if is_root():
             self.table.close()
+        self.post_stage()
+        self.pipeline.barrier(self.barrier_timeout)
+        self.stop_time = datetime.now()
         if len(self.pipeline.stages) > 1:
             self.logger.info(f'Finished stage in {self.stop_time - self.start_time}')
-        self.post_stage()
 
     def _pre_epoch(self):
         self.epoch_start_time = datetime.now()
