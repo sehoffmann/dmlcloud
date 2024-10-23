@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 import subprocess
@@ -80,6 +81,15 @@ class IORedirector:
         self.uninstall()
 
 
+class DevNullIO(io.TextIOBase):
+    """
+    Dummy TextIOBase that will simply ignore anything written to it similar to /dev/null
+    """
+
+    def write(self, msg):
+        pass
+
+
 def add_log_handlers(logger: logging.Logger):
     if logger.hasHandlers():
         return
@@ -96,6 +106,14 @@ def add_log_handlers(logger: logging.Logger):
     stderr_handler.setLevel(logging.WARNING)
     stderr_handler.setFormatter(logging.Formatter())
     logger.addHandler(stderr_handler)
+
+
+def flush_log_handlers(logger: logging.Logger):
+    """
+    Flushes all handlers of the given logger.
+    """
+    for handler in logger.handlers:
+        handler.flush()
 
 
 def experiment_header(

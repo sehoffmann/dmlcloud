@@ -7,7 +7,8 @@ import torch
 from progress_table import ProgressTable
 
 from .metrics import MetricTracker, Reduction
-from .util.distributed import is_root, root_only
+from .util.distributed import is_root
+from .util.logging import DevNullIO, flush_log_handlers
 
 
 class Stage:
@@ -139,22 +140,19 @@ class Stage:
 
     def _pre_stage(self):
         self.start_time = datetime.now()
-        self.table = ProgressTable(file=sys.stdout)
+        self.table = ProgressTable(file=sys.stdout if is_root else DevNullIO())
         self._setup_table()
         if len(self.pipeline.stages) > 1:
             self.logger.info(f'\n========== STAGE: {self.name} ==========')
 
         self.pre_stage()
 
-        for handler in self.logger.handlers:
-            handler.flush()
-        if is_root():
-            self.table._print_header()
+        flush_log_handlers(self.logger)
+
         self.pipeline.barrier(self.barrier_timeout)
 
     def _post_stage(self):
-        if is_root():
-            self.table.close()
+        self.table.close()
         self.post_stage()
         self.pipeline.barrier(self.barrier_timeout)
         self.stop_time = datetime.now()
@@ -163,6 +161,7 @@ class Stage:
 
     def _pre_epoch(self):
         self.epoch_start_time = datetime.now()
+        self.table['Epoch'] = self.current_epoch
         self.pre_epoch()
         self.pipeline._pre_epoch()
 
@@ -182,14 +181,12 @@ class Stage:
         self.tracker.next_epoch()
         pass
 
-    @root_only
     def _setup_table(self):
         for column_dct in self._metrics():
             display_name = column_dct.pop('name')
             column_dct.pop('metric')
             self.table.add_column(display_name, **column_dct)
 
-    @root_only
     def _update_table(self):
         self.table.update('Epoch', self.current_epoch)
         self.table.update('Time/Epoch', (datetime.now() - self.start_time) / self.current_epoch)
