@@ -1,6 +1,7 @@
 /data
 /slurm-*.out
 /wandb
+/doc/_build
 
 ############################  Auto Generated ############################
 
