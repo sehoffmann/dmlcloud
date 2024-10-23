@@ -70,9 +70,8 @@ class TrainingPipeline:
         if sync_bn:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         if use_ddp:
-            model = DistributedDataParallel(
-                model, broadcast_buffers=False, device_ids=[self.device], output_device=self.device
-            )
+            device_ids = [self.device] if self.device.type == 'cuda' else None  # Must be None for cpu devices
+            model = DistributedDataParallel(model, broadcast_buffers=False, device_ids=device_ids)
         self.models[name] = model
 
         if verbose:
