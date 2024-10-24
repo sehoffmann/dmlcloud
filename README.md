@@ -1,4 +1,5 @@
-# dmlcloud
+![dmlcloud logo](./misc/logo/dmlcloud_color.png)
+---------------
 [![](https://img.shields.io/pypi/v/dmlcloud)](https://pypi.org/project/dmlcloud/)
 [![](https://img.shields.io/github/actions/workflow/status/sehoffmann/dmlcloud/run_tests.yml?label=tests&logo=github)](https://github.com/sehoffmann/dmlcloud/actions/workflows/run_tests.yml)
 [![](https://img.shields.io/github/actions/workflow/status/sehoffmann/dmlcloud/run_linting.yml?label=lint&logo=github)](https://github.com/sehoffmann/dmlcloud/actions/workflows/run_linting.yml)

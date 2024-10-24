@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="787.888"
+   height="132"
+   viewBox="0 0 208.46203 34.924999"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <rect
+       x="951.84729"
+       y="-98.952003"
+       width="469.672"
+       height="133.85165"
+       id="rect3" />
+    <rect
+       x="90.361404"
+       y="96.623909"
+       width="622.91357"
+       height="188.3203"
+       id="rect1" />
+  </defs>
+  <g
+     id="layer1"
+     transform="translate(-5.5710759,-15.875034)">
+    <text
+       xml:space="preserve"
+       transform="matrix(0.26458333,0,0,0.26458333,37.743211,-12.247401)"
+       id="text1"
+       style="font-size:133.333px;white-space:pre;shape-inside:url(#rect1);display:inline;fill:#f7f7f7;fill-opacity:1"><tspan
+         x="90.361328"
+         y="219.95606"
+         id="tspan3"><tspan
+           style="font-family:Lexend;-inkscape-font-specification:Lexend"
+           id="tspan1">dml</tspan><tspan
+           style="font-weight:200;font-family:Lexend;-inkscape-font-specification:'Lexend Ultra-Light'"
+           id="tspan2">cloud</tspan></tspan></text>
+  </g>
+  <g
+     id="layer3"
+     transform="translate(-5.5710759,-15.875034)">
+    <path
+       style="fill:none;fill-opacity:1;stroke:#ffffff;stroke-width:2.64583;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       d="m 35.857259,30.030422 c -3.297431,-5.135937 -11.680622,-9.74332 -18.866435,-4.54197 -9.7771415,7.077049 -7.2667075,20.019882 3.361423,20.019882 h 24.197558 c 12.173637,0 14.235061,-13.345827 6.578671,-17.087711 -8.27166,-4.042583 -14.818887,7.206955 -14.818887,7.206955"
+       id="path1" />
+  </g>
+</svg>
