@@ -9,11 +9,11 @@ from omegaconf import OmegaConf
 
 import dmlcloud.core.logging as dml_logging
 import dmlcloud.slurm as dmlcloud_slurm
-from dmlcloud.core.callbacks import Callback
-from dmlcloud.core.distributed import is_root, world_size
-from dmlcloud.git import git_diff, git_hash
+from dmlcloud.core.distributed import world_size
+from dmlcloud.git import git_hash
 from dmlcloud.util.thirdparty import is_imported, ML_MODULES, try_get_version
 from dmlcloud.version import __version__ as dmlcloud_version
+from .common import Callback
 
 
 class DiagnosticsCallback(Callback):
@@ -91,25 +91,3 @@ class DiagnosticsCallback(Callback):
         dml_logging.info(f'Finished training in {pipe.stop_time - pipe.start_time} ({pipe.stop_time})')
         if pipe.has_checkpointing:
             dml_logging.info(f'Outputs have been saved to {pipe.run_dir}')
-
-
-class GitDiffCallback(Callback):
-    """
-    A callback that prints a git diff and if checkpointing is enabled, saves it to the checkpoint directory.
-    """
-
-    def pre_run(self, pipe):
-        diff = git_diff()
-        if diff is None:
-            return
-
-        if pipe.run_dir and is_root():
-            self._save(pipe.run_dir / 'git_diff.txt', diff)
-
-        msg = '* GIT-DIFF:\n'
-        msg += '\n'.join('    ' + line for line in diff.splitlines())
-        dml_logging.info(msg)
-
-    def _save(self, path, diff):
-        with open(path, 'w') as f:
-            f.write(diff)

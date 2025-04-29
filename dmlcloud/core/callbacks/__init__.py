@@ -1,7 +1,8 @@
 from .checkpoint import CheckpointCallback
 from .common import Callback, CallbackList, CbPriority
 from .cuda import CudaCallback
-from .logging import DiagnosticsCallback, GitDiffCallback
+from .diagnostics import DiagnosticsCallback
+from .git import GitDiffCallback
 from .metrics import CsvCallback, ReduceMetricsCallback
 from .profiler import ProfilerCallback
 from .table import TableCallback
