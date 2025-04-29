@@ -4,7 +4,10 @@ Supports both slurm and MPI. No unnecessary abstractions and overhead.
 Simple, yet powerful, API.
 """
 
-__version__ = '0.4'
+from .version import __version__
+
+__all__ = ['__version__']
+
 
 ###################################
 # Sub Packages
@@ -14,7 +17,8 @@ import dmlcloud.data as data
 import dmlcloud.git as git
 import dmlcloud.slurm as slurm
 
-__all__ = [
+
+__all__ += [
     'data',
     'git',
     'slurm',
