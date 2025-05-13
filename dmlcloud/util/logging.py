@@ -30,82 +30,84 @@ class IORedirector:
     #  * Even after uninstall, people can still hold reference to the redirected streams.
     #    Hence, we must be fault tolorant and not crash if the file is closed or the streams are changed.
 
-    class Stdout:
-        def __init__(self, parent):
-            self.parent = parent
+    class RedirectedStream:
+        def __init__(self, io_redirector, stream_name):
+            self.__io_redirector = io_redirector
+            self.__stream_name = stream_name
+            self.__org_stream = None
+
+        @property
+        def __file(self):
+            return self.__io_redirector.file
+
+        @property
+        def __current_stream(self):
+            return getattr(sys, self.__stream_name)
+
+        def install(self):
+            self.__org_stream = getattr(sys, self.__stream_name)
+            setattr(sys, self.__stream_name, self)
+
+        def uninstall(self):
+            setattr(sys, self.__stream_name, self.__org_stream)
+            self.__org_stream = None
 
         def write(self, data):
-            if self.parent.file is not None:
-                self.parent.file.write(data)
+            if self.__file is not None:
+                self.__file.write(data)
 
-            if sys.stdout is self:  # Avoid infinite recursion
-                self.parent._org_stdout.write(data)
+            if self.__current_stream is self:  # Avoid infinite recursion
+                self.__org_stream.write(data)
             else:
-                sys.stdout.write(data)
+                self.__current_stream.write(data)
 
         def flush(self):
-            if self.parent.file is not None:
-                self.parent.file.flush()
+            if self.__file is not None:
+                self.__file.flush()
 
-            if sys.stdout is self:  # Avoid infinite recursion
-                self.parent._org_stdout.flush()
+            if self.__current_stream is self:  # Avoid infinite recursion
+                self.__org_stream.flush()
             else:
-                sys.stdout.flush()
+                self.__current_stream.flush()
 
-    class Stderr:
-        def __init__(self, parent):
-            self.parent = parent
-
-        def write(self, data):
-            if self.parent.file is not None:
-                self.parent.file.write(data)
-
-            if sys.stderr is self:  # Avoid infinite recursion
-                self.parent._org_stderr.write(data)
+        def __getattr__(self, name):
+            if self.__current_stream is self:
+                return getattr(self.__org_stream, name)
             else:
-                sys.stderr.write(data)
+                raise AttributeError(obj=self, name=name)
 
-        def flush(self):
-            if self.parent.file is not None:
-                self.parent.file.flush()
-
-            if sys.stderr is self:  # Avoid infinite recursion
-                self.parent._org_stderr.flush()
-            else:
-                sys.stderr.flush()
 
     def __init__(self, log_file: Path):
         self.path = log_file
         self.file = None
-        self._org_stdout = None
-        self._org_stderr = None
+        self.stdout = None
+        self.stderr = None
 
     def install(self):
         if self.file is not None:
             return
 
         self.file = self.path.open('a', encoding='utf-8', errors='replace')
-        self._org_stdout = sys.stdout
-        self._org_stderr = sys.stderr
-        self._org_stdout.flush()
-        self._org_stderr.flush()
 
-        sys.stdout = self.Stdout(self)
-        sys.stderr = self.Stderr(self)
+        self.stdout = self.RedirectedStream(self, 'stdout')
+        self.stdout.install()
+
+        self.stderr = self.RedirectedStream(self, 'stderr')
+        self.stderr.install()
 
     def uninstall(self):
         if self.file is None:
             raise ValueError('IORedirector is not installed')
 
-        sys.stdout = self._org_stdout
-        sys.stderr = self._org_stderr
+        self.stdout.uninstall()
+        self.stderr.uninstall()
 
         file = self.file
         self.file = None  # Prevent further writes
         file.close()
 
-        self._org_stdout = None
-        self._org_stderr = None
+        self.stdout = None
+        self.stderr = None
 
     def __enter__(self):
         self.install()
