@@ -230,7 +230,10 @@ class Pipeline:
         if is_root():
             self.add_callback(CheckpointCallback(self.run_dir), CbPriority.CHECKPOINT)
             self.add_callback(CsvCallback(self.run_dir), CbPriority.CSV)
-            self.add_callback(TensorboardCallback(self.run_dir), CbPriority.TENSORBOARD)
+            try:
+                self.add_callback(TensorboardCallback(self.run_dir), CbPriority.TENSORBOARD)
+            except ImportError:
+                pass  # Tensorboard is optional
 
     def enable_wandb(
         self,
