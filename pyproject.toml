@@ -1,25 +1,30 @@
 [build-system]
-requires = ["setuptools", "packaging", "wheel", "build", "pre-commit", "pytest"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "dmlcloud"
+description = "Painless distributed training with torch"
+version = "0.4"
 authors = [
-    {name = "Sebastian Hoffmann"}
+    { name = "Sebastian Hoffmann", email = "shoffmann@bgc-jena.mpg.de"},
 ]
-description = "Distributed torch training using horovod and slurm"
+maintainers = [
+    { name = "Sebastian Hoffmann", email = "shoffmann@bgc-jena.mpg.de"},
+]
+readme = "README.md"
+license-files = ["LICENSE"]
+
 requires-python = ">=3.10"
-license = {file = "LICENSE"}
-keywords = ["pytorch", "torch.distributed", "slurm", "distributed training", "deep learning"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: BSD License",
-    "Operating System :: MacOS",
-    "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3.10",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+dependencies = [
+    "torch~=2.5",
+    "torchmetrics~=1.6",
+    "progress_table>=2.2.0",
+    "numpy",
+    "xarray",
+    "nvidia-ml-py",
+    "omegaconf~=2.3"
 ]
-dynamic = ["version", "readme", "dependencies"]
 
 [project.urls]
 Repository = "https://github.com/sehoffmann/dmlcloud"
@@ -27,16 +32,20 @@ Repository = "https://github.com/sehoffmann/dmlcloud"
 [project.scripts]
 dmlrun = "dmlcloud.run:main"
 
-[tool.setuptools.packages.find]
-include = ["dmlcloud*"]
-namespaces = false
-
-[tool.setuptools.dynamic]
-version = {attr = "dmlcloud.__version__"}
-readme = {file = ["README.md"], content-type = "text/markdown"}
-dependencies = {file = ["requirements.txt"]}
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "pytest",
+    "coverage",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-autodoc-typehints",
+]
 
 [tool.black]
 skip-string-normalization = true
 line-length = 120
-target-version = ["py310"]
+target-version = ["py310", "py311", "py312", "py313"]
+
+[tool.uv]
+python-preference = "managed"

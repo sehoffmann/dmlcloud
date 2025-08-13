@@ -2,7 +2,6 @@
 Provides functions to interact with slurm
 """
 
-
 import os
 
 

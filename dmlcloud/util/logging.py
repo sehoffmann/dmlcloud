@@ -76,7 +76,6 @@ class IORedirector:
             else:
                 raise AttributeError(obj=self, name=name)
 
-
     def __init__(self, log_file: Path):
         self.path = log_file
         self.file = None

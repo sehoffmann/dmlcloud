@@ -28,19 +28,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Dependencies
-        run: |
-          pip install -r requirements.txt
-
-      - name: Install Project
-        run: |
-          pip install .
-
       - name: Run tests & coverage
         run: |
-          coverage run -m pytest --no-header -v test
-          coverage report -m -i
-          coverage html -i
+          uv run coverage run -m pytest --no-header -v test
+          uv run coverage report -m -i
+          uv run coverage html -i
 
       - name: Archive coverage results
         if: startsWith(matrix.os, 'ubuntu')

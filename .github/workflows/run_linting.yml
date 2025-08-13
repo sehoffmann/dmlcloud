@@ -20,7 +20,7 @@ jobs:
         uses: ./.github/actions/setup_environment
 
       - name: Lint
-        run: pre-commit run --all-files
+        run: uv run pre-commit run --all-files
 
       - name: Required modifications
         if: ${{ failure() }}

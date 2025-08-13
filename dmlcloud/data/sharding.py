@@ -1,6 +1,5 @@
 """Utilities for sharding data across multiple workers."""
 
-
 from typing import Sequence
 
 import numpy as np
