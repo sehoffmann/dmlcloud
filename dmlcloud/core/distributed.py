@@ -538,15 +538,15 @@ def init(kind='auto'):
         raise ValueError(f"Invalid kind: {kind}. Must be one of 'auto', 'dummy', 'slurm', 'mpi', 'env'")
 
     if kind == 'auto':
-        _init_process_group_auto()
+        _init_process_group_auto(backend='cpu:gloo,cuda:nccl')
     elif kind == 'dummy':
-        _init_process_group_dummy()
+        _init_process_group_dummy(backend='cpu:gloo,cuda:nccl')
     elif kind == 'slurm':
-        _init_process_group_slurm()
+        _init_process_group_slurm(backend='cpu:gloo,cuda:nccl')
     elif kind == 'mpi':
-        _init_process_group_MPI()
+        _init_process_group_MPI(backend='cpu:gloo,cuda:nccl')
     elif kind == 'env':
-        _init_process_group_env()
+        _init_process_group_env(backend='cpu:gloo,cuda:nccl')
 
     atexit.register(deinitialize_torch_distributed, fail_silently=True)
 
