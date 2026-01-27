@@ -146,6 +146,7 @@ class Tracker(torch.nn.Module):
 
         self.metrics[name] = metric
 
+    @torch.compiler.disable
     def log(self, name: str, value: Any, reduction: str = 'mean', **kwargs):
         if reduction not in ['mean', 'sum', 'min', 'max', 'cat']:
             raise ValueError(f'Invalid reduction {reduction}. Must be one of mean, sum, min, max, cat')
