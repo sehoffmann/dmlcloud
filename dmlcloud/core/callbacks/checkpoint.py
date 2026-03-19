@@ -35,7 +35,7 @@ class CheckpointCallback(Callback):
             dml_checkpoint.create_checkpoint_dir(self.run_dir)
             dml_checkpoint.save_config(pipe.config, self.run_dir)
 
-            with open(pipe.run_dir / "environment.txt", 'w') as f:
+            with open(pipe.run_dir / 'diagnostics' / 'environment.txt', 'w') as f:
                 for k, v in os.environ.items():
                     f.write(f"{k}={v}\n")
 

@@ -63,6 +63,9 @@ def create_checkpoint_dir(path: Path | str, name: Optional[str] = None) -> Path:
     indicator_file = path / '.dmlcloud'
     indicator_file.touch()
 
+    diagnostics_dir = path / 'diagnostics'
+    diagnostics_dir.mkdir(exist_ok=True)
+
     if slurm_job_id() is not None:
         with open(path / '.slurm-jobid', 'w') as f:
             f.write(slurm_job_id())

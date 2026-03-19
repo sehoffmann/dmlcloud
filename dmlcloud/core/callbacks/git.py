@@ -38,7 +38,7 @@ class GitDiffCallback(Callback):
             return
 
         if pipe.run_dir and is_root():
-            self._save(pipe.run_dir / 'git_diff.txt', diff)
+            self._save(pipe.run_dir / 'diagnostics' / 'git_diff.txt', diff)
 
         self._log_diff(diff)
 
