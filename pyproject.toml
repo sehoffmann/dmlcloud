@@ -26,6 +26,12 @@ dependencies = [
     "omegaconf~=2.3"
 ]
 
+[project.optional-dependencies]
+examples = [
+    'torchvision',
+    'wandb',
+]
+
 [project.urls]
 Repository = "https://github.com/sehoffmann/dmlcloud"
 
