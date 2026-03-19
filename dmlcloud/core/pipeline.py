@@ -23,7 +23,7 @@ from .callbacks import (
     WandbLoggerCallback,
 )
 from .checkpoint import find_slurm_checkpoint, generate_checkpoint_path, is_valid_checkpoint_dir
-from .distributed import broadcast_object, init, is_root, local_rank
+from .distributed import broadcast_object, init, is_root, local_rank, local_world_size
 from .stage import Stage
 
 
@@ -313,17 +313,23 @@ class Pipeline:
 
     @cached_property
     def device(self):
-        if torch.cuda.is_available():
-            if local_rank() is None:
-                warnings.warn(
-                    'CUDA is available but no local rank found. Make sure to set CUDA_VISIBLE_DEVICES manually for each rank.'
-                )
-                return torch.device('cuda')
-            else:
-                return torch.device('cuda', local_rank())
-        else:
+        if not torch.cuda.is_available():
             warnings.warn('CUDA is not available. Running on CPU.')
             return torch.device('cpu')
+
+        if local_world_size() and local_world_size() > torch.cuda.device_count():
+            warnings.warn(
+                f'Local world size ({local_world_size()}) is greater than the number of available CUDA devices ({torch.cuda.device_count()}). Make sure to set CUDA_VISIBLE_DEVICES manually for each rank.'
+            )
+            return torch.device('cuda')
+        elif local_rank() is None:
+            warnings.warn(
+                'CUDA is available but no local rank found. Make sure to set CUDA_VISIBLE_DEVICES manually for each rank'
+            )
+            return torch.device('cuda')
+        else:
+            return torch.device('cuda', local_rank())
+
 
     def _pre_run(self):
         self.start_time = datetime.now()
