@@ -330,7 +330,6 @@ class Pipeline:
         else:
             return torch.device('cuda', local_rank())
 
-
     def _pre_run(self):
         self.start_time = datetime.now()
 
