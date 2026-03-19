@@ -76,6 +76,13 @@ class _WorkerInfo:
         cls.NODE_ID = None
 
 
+def _get_backend(kwargs: dict):
+    backend = kwargs.pop('backend', None)
+    if backend is None:
+        backend = 'cpu:gloo,cuda:nccl' if dist.is_nccl_available() and torch.cuda.is_available() else 'gloo'
+    return backend
+
+
 def _initialize_via_tcp(
     ip: str,
     port: int,
@@ -95,6 +102,9 @@ def _initialize_via_tcp(
         local_world_size=local_world_size,
         node_id=node_id,
     )
+
+    backend = _get_backend(kwargs)
+
     msg = f'Connecting via {method} and TCPStore:'
     msg += f'\n  rank: {_WorkerInfo.RANK}'
     msg += f'\n  world size: {_WorkerInfo.WORLD_SIZE}'
@@ -103,6 +113,7 @@ def _initialize_via_tcp(
     msg += f'\n  node id: {_WorkerInfo.NODE_ID}'
     msg += f'\n  master ip: {ip}'
     msg += f'\n  master port: {port}'
+    msg += f'\n  backend: {backend}'
     print(msg, flush=True)
 
     # TODO: Add check that ip == rank0 host
@@ -118,6 +129,7 @@ def _initialize_via_tcp(
         store=store,
         world_size=_WorkerInfo.WORLD_SIZE,
         rank=_WorkerInfo.RANK,
+        backend=backend,
         **kwargs,
     )
     if is_root():
@@ -218,6 +230,7 @@ def _init_process_group_env(**kwargs):
         local_rank=int(os.environ['LOCAL_RANK']),
         local_world_size=int(os.environ['LOCAL_WORLD_SIZE']),
         node_id=int(os.environ['GROUP_RANK']),
+        **kwargs,
     )
 
 
@@ -235,11 +248,9 @@ def _init_process_group_dummy(**kwargs):
         local_world_size=1,
         node_id=0,
     )
+    backend = _get_backend(kwargs)
 
-    backend = kwargs.get('backend', None)
-    if backend is None:
-        backend = 'cpu:gloo,cuda:nccl' if dist.is_nccl_available() and torch.cuda.is_available() else 'gloo'
-    print(f'Initializing dummy process group with a single process via HashStore (backend: {backend})', flush=True)
+    print(f'Initializing dummy process group with a single process via HashStore (backend = "{backend}")', flush=True)
     store = dist.HashStore()
     dist.init_process_group(store=store, rank=0, world_size=1, backend=backend, **kwargs)
 
@@ -281,12 +292,11 @@ def _init_process_group_slurm(port=DEFAULT_PORT, **kwargs):
     )
 
 
-def _init_process_group_auto(verbose=True, **kwargs):
+def _init_process_group_auto(**kwargs):
     """
     Tries to initialize torch.distributed in the following order:
     1. If the MASTER_PORT environment variable is set, use environment variable initialization
     2. If srun (slurm) was used to launch this program, use slurms environment variables
-    2. If MPI is available, use MPI to exchange ip addresses (see init_process_group_MPI)
     3. Otherwise, a dummy process group with a single process is used (no distributed training)
     """
 
@@ -325,13 +335,13 @@ def init(kind='auto'):
         raise ValueError(f"Invalid kind: {kind}. Must be one of 'auto', 'dummy', 'slurm', 'env'")
 
     if kind == 'auto':
-        _init_process_group_auto(backend='cpu:gloo,cuda:nccl')
+        _init_process_group_auto()
     elif kind == 'dummy':
-        _init_process_group_dummy(backend='cpu:gloo,cuda:nccl')
+        _init_process_group_dummy()
     elif kind == 'slurm':
-        _init_process_group_slurm(backend='cpu:gloo,cuda:nccl')
+        _init_process_group_slurm()
     elif kind == 'env':
-        _init_process_group_env(backend='cpu:gloo,cuda:nccl')
+        _init_process_group_env()
 
     atexit.register(deinitialize_torch_distributed, fail_silently=True)
 
