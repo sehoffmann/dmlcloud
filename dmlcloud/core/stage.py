@@ -167,12 +167,26 @@ class Stage:
         """
         self.callbacks.append(callback, priority)
 
-    def log(self, name: str, value: Any, reduction: str = 'mean', prefixed: bool = True, log_step: bool = True):
+    def log(self, name: str, value: Any, reduction: str = 'mean', prefixed: bool = True, log_step: bool = True, synchronize: bool = True):
+        """
+        Logs a metric for the current step and epoch.
+
+        If `synchronize` is True, the metric will be (all-)reduced across distributed processes before being logged.
+        Care must be taken to ensure that every process participates in this reduction to avoid hangs and failures.
+        
+        Args:
+            name (str): The name of the metric.
+            value (Any): The value of the metric.
+            reduction (str, optional): The reduction method to use when aggregating across multiple steps. Defaults to 'mean'. Supported values are 'mean', 'sum', 'min', 'max', and 'none'.
+            prefixed (bool, optional): Whether to prefix the metric name with self.metric_prefix.
+            log_step (bool, optional): Whether to reduce and log the metric to step_metrics. Defaults to True.
+            synchronize (bool, optional): Whether to reduce the metric across distributed processes. Defaults to True.
+        """
         if prefixed and self.metric_prefix:
             name = f'{self.metric_prefix}/{name}'
-        self.metrics.log(name, value, reduction)
+        self.metrics.log(name, value, reduction, sync_on_compute=synchronize)
         if log_step:
-            self.step_metrics.log(name, value, reduction)
+            self.step_metrics.log(name, value, reduction, sync_on_compute=synchronize)
 
     def add_metric(self, name, metric):
         metric = metric.to(self.device)
