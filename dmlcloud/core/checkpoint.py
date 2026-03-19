@@ -56,8 +56,13 @@ def is_valid_checkpoint_dir(path: Path) -> bool:
 
 def create_checkpoint_dir(path: Path | str, name: Optional[str] = None) -> Path:
     path.mkdir(parents=True, exist_ok=True)
-    (path / '.dmlcloud').touch()
-    (path / 'log.txt').touch()
+
+    log_dir = path / 'logs'
+    log_dir.mkdir(exist_ok=True)
+
+    indicator_file = path / '.dmlcloud'
+    indicator_file.touch()
+
     if slurm_job_id() is not None:
         with open(path / '.slurm-jobid', 'w') as f:
             f.write(slurm_job_id())

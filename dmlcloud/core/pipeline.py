@@ -240,8 +240,9 @@ class Pipeline:
             self.run_dir = broadcast_object(path)
             self.resumed = False
 
+        self.add_callback(CheckpointCallback(self.run_dir), CbPriority.CHECKPOINT)
+
         if is_root():
-            self.add_callback(CheckpointCallback(self.run_dir), CbPriority.CHECKPOINT)
             self.add_callback(CsvCallback(self.run_dir), CbPriority.CSV)
             try:
                 self.add_callback(TensorboardCallback(self.run_dir), CbPriority.TENSORBOARD)

@@ -2,7 +2,10 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
+import torch
+
 import dmlcloud.core.checkpoint as dml_checkpoint
+from dmlcloud.core.distributed import is_root, rank
 from dmlcloud.util.logging import IORedirector
 from .common import Callback
 
@@ -28,16 +31,20 @@ class CheckpointCallback(Callback):
         self.io_redirector = None
 
     def pre_run(self, pipe: 'Pipeline'):
-        if not dml_checkpoint.is_valid_checkpoint_dir(self.run_dir):
+        if is_root() and not dml_checkpoint.is_valid_checkpoint_dir(self.run_dir):
             dml_checkpoint.create_checkpoint_dir(self.run_dir)
             dml_checkpoint.save_config(pipe.config, self.run_dir)
 
-        self.io_redirector = IORedirector(pipe.run_dir / 'log.txt')
+            with open(pipe.run_dir / "environment.txt", 'w') as f:
+                for k, v in os.environ.items():
+                    f.write(f"{k}={v}\n")
+
+        torch.distributed.barrier()  # ensure checkpoint dir is created before other workers proceed
+
+        self.io_redirector = IORedirector(pipe.run_dir / 'logs' / f'worker_{rank()}.txt')
         self.io_redirector.install()
 
-        with open(pipe.run_dir / "environment.txt", 'w') as f:
-            for k, v in os.environ.items():
-                f.write(f"{k}={v}\n")
+        torch.distributed.barrier()  # ensure all workers have setup IO redirection before proceeding
 
     def cleanup(self, pipe, exc_type, exc_value, traceback):
         if self.io_redirector is not None:
