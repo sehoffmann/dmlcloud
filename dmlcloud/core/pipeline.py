@@ -66,7 +66,9 @@ def current_stage() -> Stage | None:
         return current_pipe().current_stage
 
 
-def log_metric(name: str, value: Any, reduction: str = 'mean', prefixed: bool = True, ignore_missing_stage: bool = True):
+def log_metric(
+    name: str, value: Any, reduction: str = 'mean', prefixed: bool = True, ignore_missing_stage: bool = True
+):
     """
     Shorthand for current_stage().log
 

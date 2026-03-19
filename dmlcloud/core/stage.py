@@ -167,13 +167,21 @@ class Stage:
         """
         self.callbacks.append(callback, priority)
 
-    def log(self, name: str, value: Any, reduction: str = 'mean', prefixed: bool = True, log_step: bool = True, synchronize: bool = True):
+    def log(
+        self,
+        name: str,
+        value: Any,
+        reduction: str = 'mean',
+        prefixed: bool = True,
+        log_step: bool = True,
+        synchronize: bool = True,
+    ):
         """
         Logs a metric for the current step and epoch.
 
         If `synchronize` is True, the metric will be (all-)reduced across distributed processes before being logged.
         Care must be taken to ensure that every process participates in this reduction to avoid hangs and failures.
-        
+
         Args:
             name (str): The name of the metric.
             value (Any): The value of the metric.

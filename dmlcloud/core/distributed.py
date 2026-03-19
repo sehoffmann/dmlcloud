@@ -105,12 +105,12 @@ def _initialize_via_tcp(
     msg += f'\n  master port: {port}'
     print(msg, flush=True)
 
-    # TODO: Add check that ip == rank0 host 
+    # TODO: Add check that ip == rank0 host
 
     store = dist.TCPStore(
-        host_name=ip, 
+        host_name=ip,
         port=port,
-        world_size=_WorkerInfo.WORLD_SIZE, 
+        world_size=_WorkerInfo.WORLD_SIZE,
         is_master=_WorkerInfo.RANK == 0,
     )
 
@@ -142,7 +142,6 @@ def has_environment():
     """
 
     return 'MASTER_PORT' in os.environ
-
 
 
 def rank():
@@ -200,7 +199,6 @@ def local_node():
     return _WorkerInfo.NODE_ID
 
 
-
 def _init_process_group_env(**kwargs):
     """
     Intialize using "env://" method.
@@ -210,7 +208,7 @@ def _init_process_group_env(**kwargs):
     """
     if not has_environment():
         raise RuntimeError('Environment variables for env:// initialization not found')
-    
+
     _initialize_via_tcp(
         ip=os.environ['MASTER_ADDR'],
         port=int(os.environ['MASTER_PORT']),
@@ -354,7 +352,6 @@ def deinitialize_torch_distributed(fail_silently=False):
     _WorkerInfo.LOCAL_WORLD_SIZE = None
     _WorkerInfo.NODE_ID = None
     dist.destroy_process_group()
-
 
 
 def is_root(group: dist.ProcessGroup = None):
@@ -516,7 +513,6 @@ def root_first(group: dist.ProcessGroup = None):
             yield
         finally:
             pass
-
 
 
 def all_gather_object(obj, group=None):
