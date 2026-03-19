@@ -28,7 +28,8 @@ class TensorboardCallback(Callback):
     def post_epoch(self, stage: 'Stage'):
         metrics = stage.history.last()
         for key, value in metrics.items():
-            self.writer.add_scalar(key, value, stage.current_epoch)
+            if value is not None:
+                self.writer.add_scalar(key, value, stage.current_epoch)
 
     def cleanup(self, pipe, exc_type, exc_value, traceback):
         if self.writer is not None:
