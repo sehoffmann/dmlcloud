@@ -69,6 +69,60 @@ class CudaCallback(Callback):
         if pipe.run_dir and is_root():
             self._save(pipe.run_dir / 'diagnostics' / 'cuda_devices.json', all_infos)
 
+    def post_step(self, stage):
+        if is_root():
+            stats = torch.cuda.memory_stats(stage.device)
+            stage.log(
+                'misc/cuda/allocated_bytes_peak',
+                stats['allocated_bytes.all.peak'],
+                prefixed=False,
+                synchronize=False,
+                reduction='max',
+            )
+            stage.log(
+                'misc/cuda/reserved_bytes_peak',
+                stats['reserved_bytes.all.peak'],
+                prefixed=False,
+                synchronize=False,
+                reduction='max',
+            )
+            stage.log(
+                'misc/cuda/active_bytes_peak',
+                stats['active_bytes.all.peak'],
+                prefixed=False,
+                synchronize=False,
+                reduction='max',
+            )
+            stage.log(
+                'misc/cuda/requested_bytes_peak',
+                stats['requested_bytes.all.peak'],
+                prefixed=False,
+                synchronize=False,
+                reduction='max',
+            )
+            stage.log(
+                'misc/cuda/num_alloc_retries',
+                stats['num_alloc_retries'],
+                prefixed=False,
+                synchronize=False,
+                reduction='max',
+            )
+            stage.log(
+                'misc/cuda/num_device_alloc',
+                stats['num_device_alloc'],
+                prefixed=False,
+                synchronize=False,
+                reduction='max',
+            )
+            stage.log(
+                'misc/cuda/num_device_free',
+                stats['num_device_free'],
+                prefixed=False,
+                synchronize=False,
+                reduction='max',
+            )
+            torch.cuda.reset_peak_memory_stats(stage.device)
+
     def _save(self, path, all_infos):
         with open(path, 'w') as f:
             dct = {f'rank_{i}': info for i, info in enumerate(all_infos)}
