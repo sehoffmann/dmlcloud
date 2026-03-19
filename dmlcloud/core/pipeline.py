@@ -66,11 +66,22 @@ def current_stage() -> Stage | None:
         return current_pipe().current_stage
 
 
-def log_metric(name: str, value: Any, reduction: str = 'mean', prefixed: bool = True):
+def log_metric(name: str, value: Any, reduction: str = 'mean', prefixed: bool = True, ignore_missing_stage: bool = True):
     """
     Shorthand for current_stage().log
+
+    Args:
+        name (str): Name of the metric to log.
+        value (Any): Value of the metric to log.
+        reduction (str, optional): Reduction method to apply to the metric value. Defaults to 'mean'.
+        prefixed (bool, optional): Whether to prefix the metric name with the stage name. Defaults to True.
+        ignore_missing_stage (bool, optional): Whether to ignore logging if there is no current stage. Defaults to True.
     """
-    return current_stage().log(name, value, reduction=reduction, prefixed=prefixed)
+    stage = current_stage()
+    if stage is not None:
+        stage.log(name, value, reduction=reduction, prefixed=prefixed)
+    elif not ignore_missing_stage:
+        raise ValueError('No current stage to log metric to. Set ignore_missing_stage=True to ignore this error.')
 
 
 class _RunGuard:
