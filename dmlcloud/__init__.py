@@ -65,7 +65,6 @@ from .core.distributed import (
     deinitialize_torch_distributed,
     gather_object,
     has_environment,
-    has_mpi,
     has_slurm,
     init,
     is_root,
@@ -82,7 +81,6 @@ from .core.distributed import (
 __all__ += [
     'has_slurm',
     'has_environment',
-    'has_mpi',
     'is_root',
     'root_only',
     'root_first',

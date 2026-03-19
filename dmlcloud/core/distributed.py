@@ -13,9 +13,6 @@ import torch
 import torch.distributed
 import torch.distributed as dist
 
-from ..util.tcp import find_free_port, get_local_ips
-
-
 if TYPE_CHECKING:
     from dmlcloud import Pipeline, Stage  # noqa: F401
 
@@ -23,7 +20,6 @@ if TYPE_CHECKING:
 __all__ = [
     'has_slurm',
     'has_environment',
-    'has_mpi',
     'is_root',
     'root_only',
     'root_first',
@@ -41,7 +37,7 @@ __all__ = [
 ]
 
 
-DEFAULT_PORT = os.environ.get('DMLCLOUD_PORT', 41312)  # dml
+DEFAULT_PORT = int(os.environ.get('DMLCLOUD_PORT', 41312))  # dml
 LONG_TIMEOUT = 24 * 60 * 60  # timeout for long running barriers, default is 24 hours
 
 
@@ -52,6 +48,80 @@ class _WorkerInfo:
     LOCAL_RANK = None
     LOCAL_WORLD_SIZE = None
     NODE_ID = None
+
+    @classmethod
+    def set_info(
+        cls,
+        init_method: str,
+        rank: int,
+        world_size: int,
+        local_rank: int | None = None,
+        local_world_size: int | None = None,
+        node_id: int | None = None,
+    ):
+        cls.INIT_METHOD = init_method
+        cls.RANK = rank
+        cls.WORLD_SIZE = world_size
+        cls.LOCAL_RANK = local_rank
+        cls.LOCAL_WORLD_SIZE = local_world_size
+        cls.NODE_ID = node_id
+
+    @classmethod
+    def reset(cls):
+        cls.INIT_METHOD = None
+        cls.RANK = None
+        cls.WORLD_SIZE = None
+        cls.LOCAL_RANK = None
+        cls.LOCAL_WORLD_SIZE = None
+        cls.NODE_ID = None
+
+
+def _initialize_via_tcp(
+    ip: str,
+    port: int,
+    method: str,
+    rank: int,
+    world_size: int,
+    local_rank: int | None = None,
+    local_world_size: int | None = None,
+    node_id: int | None = None,
+    **kwargs,
+):
+    _WorkerInfo.set_info(
+        init_method=method,
+        rank=rank,
+        world_size=world_size,
+        local_rank=local_rank,
+        local_world_size=local_world_size,
+        node_id=node_id,
+    )
+    msg = f'Connecting via {method} and TCPStore:'
+    msg += f'\n  rank: {_WorkerInfo.RANK}'
+    msg += f'\n  world size: {_WorkerInfo.WORLD_SIZE}'
+    msg += f'\n  local rank: {_WorkerInfo.LOCAL_RANK}'
+    msg += f'\n  local world size: {_WorkerInfo.LOCAL_WORLD_SIZE}'
+    msg += f'\n  node id: {_WorkerInfo.NODE_ID}'
+    msg += f'\n  master ip: {ip}'
+    msg += f'\n  master port: {port}'
+    print(msg, flush=True)
+
+    # TODO: Add check that ip == rank0 host 
+
+    store = dist.TCPStore(
+        host_name=ip, 
+        port=port,
+        world_size=_WorkerInfo.WORLD_SIZE, 
+        is_master=_WorkerInfo.RANK == 0,
+    )
+
+    dist.init_process_group(
+        store=store,
+        world_size=_WorkerInfo.WORLD_SIZE,
+        rank=_WorkerInfo.RANK,
+        **kwargs,
+    )
+    if is_root():
+        print('torch.distributed initialized', flush=True)
 
 
 def has_slurm():
@@ -74,19 +144,217 @@ def has_environment():
     return 'MASTER_PORT' in os.environ
 
 
-def has_mpi():
+
+def rank():
     """
-    Check if MPI is available.
-
-    Requires the mpi4py package.
+    Returns the rank of the current process.
     """
 
-    try:
-        from mpi4py import MPI  # noqa: F401
+    if _WorkerInfo.RANK is None:
+        return dist.get_rank()
+    else:
+        return _WorkerInfo.RANK
 
-        return True
-    except ImportError:
-        return False
+
+def world_size():
+    """
+    Returns the total number of processes.
+    """
+
+    if _WorkerInfo.WORLD_SIZE is None:
+        return dist.get_world_size()
+    else:
+        return _WorkerInfo.WORLD_SIZE
+
+
+def local_rank():
+    """
+    Returns the local rank of the current process.
+
+    Returns:
+        int: The local rank of the current process if available, otherwise None.
+    """
+
+    return _WorkerInfo.LOCAL_RANK
+
+
+def local_world_size():
+    """
+    Returns the local world size.
+
+    Returns:
+        int: The local world size if available, otherwise None.
+    """
+
+    return _WorkerInfo.LOCAL_WORLD_SIZE
+
+
+def local_node():
+    """
+    Returns the node id of the current process.
+
+    Returns:
+        int: The node id of the current process if available, otherwise None.
+    """
+
+    return _WorkerInfo.NODE_ID
+
+
+
+def _init_process_group_env(**kwargs):
+    """
+    Intialize using "env://" method.
+
+    Reads out helper environment variables to determine local rank and local world size.
+
+    """
+    if not has_environment():
+        raise RuntimeError('Environment variables for env:// initialization not found')
+    
+    _initialize_via_tcp(
+        ip=os.environ['MASTER_ADDR'],
+        port=int(os.environ['MASTER_PORT']),
+        method='env',
+        rank=int(os.environ['RANK']),
+        world_size=int(os.environ['WORLD_SIZE']),
+        local_rank=int(os.environ['LOCAL_RANK']),
+        local_world_size=int(os.environ['LOCAL_WORLD_SIZE']),
+        node_id=int(os.environ['GROUP_RANK']),
+    )
+
+
+def _init_process_group_dummy(**kwargs):
+    """
+    Initializes the process group with a single process.
+
+    Uses HashStore under the hood. Useful for applications that only run on a single GPU.
+    """
+    _WorkerInfo.set_info(
+        init_method='dummy',
+        rank=0,
+        world_size=1,
+        local_rank=0,
+        local_world_size=1,
+        node_id=0,
+    )
+
+    backend = kwargs.get('backend', None)
+    if backend is None:
+        backend = 'cpu:gloo,cuda:nccl' if dist.is_nccl_available() and torch.cuda.is_available() else 'gloo'
+    print(f'Initializing dummy process group with a single process via HashStore (backend: {backend})', flush=True)
+    store = dist.HashStore()
+    dist.init_process_group(store=store, rank=0, world_size=1, backend=backend, **kwargs)
+
+
+def _init_process_group_slurm(port=DEFAULT_PORT, **kwargs):
+    if not has_slurm():
+        raise RuntimeError('SLURM environment variables not found. Are you sure you launched this program with srun?')
+
+    ip = os.environ['SLURM_SRUN_COMM_HOST']
+    port += int(os.environ['SLURM_JOB_ID']) % 7879
+
+    rank = int(os.environ['SLURM_PROCID'])
+    world_size = int(os.environ['SLURM_NTASKS'])
+    local_rank = int(os.environ['SLURM_LOCALID'])
+    node_id = int(os.environ['SLURM_NODEID'])
+
+    # Determine local world size via SLURM_TASKS_PER_NODE
+    # Format example: 2(x3),4,1
+    tasks_per_node_raw = os.environ['SLURM_TASKS_PER_NODE'].split(',')
+    tasks_per_node = []
+    for t in tasks_per_node_raw:
+        if '(x' in t:
+            ntasks, nnodes = t.split('(x')
+            tasks_per_node.extend([int(ntasks)] * int(nnodes[:-1]))
+        else:
+            tasks_per_node.append(int(t))
+    local_world_size = tasks_per_node[_WorkerInfo.NODE_ID]
+
+    _initialize_via_tcp(
+        ip=ip,
+        port=port,
+        method='slurm',
+        rank=rank,
+        world_size=world_size,
+        local_rank=local_rank,
+        local_world_size=local_world_size,
+        node_id=node_id,
+        **kwargs,
+    )
+
+
+def _init_process_group_auto(verbose=True, **kwargs):
+    """
+    Tries to initialize torch.distributed in the following order:
+    1. If the MASTER_PORT environment variable is set, use environment variable initialization
+    2. If srun (slurm) was used to launch this program, use slurms environment variables
+    2. If MPI is available, use MPI to exchange ip addresses (see init_process_group_MPI)
+    3. Otherwise, a dummy process group with a single process is used (no distributed training)
+    """
+
+    if has_environment():
+        _init_process_group_env(**kwargs)
+    elif has_slurm():
+        _init_process_group_slurm(**kwargs)
+    else:
+        _init_process_group_dummy()
+
+
+def init(kind='auto'):
+    """
+    Initializes the torch.distributed framework.
+
+    For most use cases, kind='auto' (the default) should be sufficient.
+
+    - If kind is 'env', the "env://" initialization method is used. See torch.distributed.init_process_group.
+    - If kind is 'slurm', SLURM environment variables are used to find the ip address of the root rank.
+    - If kind is 'mpi', MPI is used to exchange ip addresses.
+    - If kind is 'dummy', a dummy process group with a single process is used (no distributed training). This is useful for debugging and testing.
+
+
+    The 'auto' kind tries to initialize the process group in the following order:
+
+    1. If the MASTER_PORT environment variable is set, use environment variable initialization
+    2. If srun (slurm) was used to launch this program, use slurms environment variables
+    3. If MPI is available, use MPI to exchange ip addresses
+    4. Otherwise, a dummy process group with a single process is used (no distributed training)
+
+    Args:
+        kind (str): The kind of initialization to use. Can be one of 'auto', 'dummy', 'slurm', or 'env'.
+    """
+
+    if kind not in ['auto', 'dummy', 'slurm', 'env']:
+        raise ValueError(f"Invalid kind: {kind}. Must be one of 'auto', 'dummy', 'slurm', 'env'")
+
+    if kind == 'auto':
+        _init_process_group_auto(backend='cpu:gloo,cuda:nccl')
+    elif kind == 'dummy':
+        _init_process_group_dummy(backend='cpu:gloo,cuda:nccl')
+    elif kind == 'slurm':
+        _init_process_group_slurm(backend='cpu:gloo,cuda:nccl')
+    elif kind == 'env':
+        _init_process_group_env(backend='cpu:gloo,cuda:nccl')
+
+    atexit.register(deinitialize_torch_distributed, fail_silently=True)
+
+
+def deinitialize_torch_distributed(fail_silently=False):
+    """
+    Deinitializes the torch distributed framework.
+    At the time of writing, `dist.destroy_process_group()` is not well documented.
+    Hence, this function.
+    """
+    if not dist.is_initialized() and fail_silently:
+        return
+
+    _WorkerInfo.INIT_METHOD = None
+    _WorkerInfo.RANK = None
+    _WorkerInfo.WORLD_SIZE = None
+    _WorkerInfo.LOCAL_RANK = None
+    _WorkerInfo.LOCAL_WORLD_SIZE = None
+    _WorkerInfo.NODE_ID = None
+    dist.destroy_process_group()
+
 
 
 def is_root(group: dist.ProcessGroup = None):
@@ -250,71 +518,6 @@ def root_first(group: dist.ProcessGroup = None):
             pass
 
 
-def mpi_local_comm():
-    try:
-        from mpi4py import MPI
-
-        comm = MPI.COMM_WORLD
-        local_comm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0, MPI.INFO_NULL)
-        return local_comm
-    except ImportError:
-        return None
-
-
-def rank():
-    """
-    Returns the rank of the current process.
-    """
-
-    if _WorkerInfo.RANK is None:
-        return dist.get_rank()
-    else:
-        return _WorkerInfo.RANK
-
-
-def world_size():
-    """
-    Returns the total number of processes.
-    """
-
-    if _WorkerInfo.WORLD_SIZE is None:
-        return dist.get_world_size()
-    else:
-        return _WorkerInfo.WORLD_SIZE
-
-
-def local_rank():
-    """
-    Returns the local rank of the current process.
-
-    Returns:
-        int: The local rank of the current process if available, otherwise None.
-    """
-
-    return _WorkerInfo.LOCAL_RANK
-
-
-def local_world_size():
-    """
-    Returns the local world size.
-
-    Returns:
-        int: The local world size if available, otherwise None.
-    """
-
-    return _WorkerInfo.LOCAL_WORLD_SIZE
-
-
-def local_node():
-    """
-    Returns the node id of the current process.
-
-    Returns:
-        int: The node id of the current process if available, otherwise None.
-    """
-
-    return _WorkerInfo.NODE_ID
-
 
 def all_gather_object(obj, group=None):
     """
@@ -376,197 +579,6 @@ def broadcast_object(obj=None, src=0, group=None, device=None):
     objlist = [obj]
     dist.broadcast_object_list(objlist, src=src, group=group, device=device)
     return objlist[0]
-
-
-def _init_process_group_env(**kwargs):
-    """
-    Intialize using "env://" method.
-
-    Reads out helper environment variables to determine local rank and local world size.
-
-    """
-    _WorkerInfo.INIT_METHOD = 'env'
-    _WorkerInfo.RANK = int(os.environ['RANK'])
-    _WorkerInfo.WORLD_SIZE = int(os.environ['WORLD_SIZE'])
-    _WorkerInfo.LOCAL_RANK = int(os.environ['LOCAL_RANK'])
-    _WorkerInfo.LOCAL_WORLD_SIZE = int(os.environ['LOCAL_WORLD_SIZE'])
-    _WorkerInfo.NODE_ID = int(os.environ['GROUP_RANK'])
-
-    dist.init_process_group(init_method='env://', **kwargs)
-
-
-def _init_process_group_dummy(**kwargs):
-    """
-    Initializes the process group with a single process.
-
-    Uses HashStore under the hood. Useful for applications that only run on a single GPU.
-    """
-    _WorkerInfo.INIT_METHOD = 'dummy'
-    _WorkerInfo.RANK = 0
-    _WorkerInfo.WORLD_SIZE = 1
-    _WorkerInfo.LOCAL_RANK = 0
-    _WorkerInfo.LOCAL_WORLD_SIZE = 1
-    _WorkerInfo.NODE_ID = 0
-
-    backend = kwargs.get('backend', None)
-    if backend is None:
-        backend = 'cpu:gloo,cuda:nccl' if dist.is_nccl_available() and torch.cuda.is_available() else 'gloo'
-    store = dist.HashStore()
-    dist.init_process_group(store=store, rank=0, world_size=1, backend=backend, **kwargs)
-
-
-def _init_process_group_slurm(port=DEFAULT_PORT, **kwargs):
-    _WorkerInfo.INIT_METHOD = 'slurm'
-    _WorkerInfo.RANK = int(os.environ['SLURM_PROCID'])
-    _WorkerInfo.WORLD_SIZE = int(os.environ['SLURM_NTASKS'])
-    _WorkerInfo.LOCAL_RANK = int(os.environ['SLURM_LOCALID'])
-    _WorkerInfo.NODE_ID = int(os.environ['SLURM_NODEID'])
-
-    # Determine local world size via SLURM_TASKS_PER_NODE
-    # Format example: 2(x3),4,1
-    tasks_per_node_raw = os.environ['SLURM_TASKS_PER_NODE'].split(',')
-    tasks_per_node = []
-    for t in tasks_per_node_raw:
-        if '(x' in t:
-            ntasks, nnodes = t.split('(x')
-            tasks_per_node.extend([int(ntasks)] * int(nnodes[:-1]))
-        else:
-            tasks_per_node.append(int(t))
-    _WorkerInfo.LOCAL_WORLD_SIZE = tasks_per_node[_WorkerInfo.NODE_ID]
-
-    ip = os.environ['SLURM_SRUN_COMM_HOST']
-    port += int(os.environ['SLURM_JOB_ID']) % 7879
-
-    dist.init_process_group(
-        init_method=f'tcp://{ip}:{port}',
-        world_size=_WorkerInfo.WORLD_SIZE,
-        rank=_WorkerInfo.RANK,
-        **kwargs,
-    )
-
-
-def _init_process_group_MPI(ip_idx=0, port=DEFAULT_PORT, **kwargs):
-    """
-    This method setups up the distributed backend using MPI, even
-    if torch was not built with MPI support. For this to work, you
-    need to have mpi4py installed and the root rank must be reachable
-    via TCP.
-
-    If port is None, we will automatically try to find a free port.
-
-    ip_idx can be used to specify which IP address to use if the root
-    has multiple IP addresses. The default is 0, which means the first.
-
-    kwargs are passed to torch.distributed.init_process_group.
-    """
-    from mpi4py import MPI
-
-    comm = MPI.COMM_WORLD
-    local_comm = mpi_local_comm()
-
-    _WorkerInfo.INIT_METHOD = 'mpi'
-    _WorkerInfo.RANK = comm.Get_rank()
-    _WorkerInfo.WORLD_SIZE = comm.Get_size()
-    _WorkerInfo.LOCAL_RANK = local_comm.Get_rank()
-    _WorkerInfo.LOCAL_WORLD_SIZE = local_comm.Get_size()
-
-    if port is None:
-        port = find_free_port()
-
-    if _WorkerInfo.RANK == 0:
-        ip = get_local_ips()[ip_idx]
-    else:
-        ip = None
-
-    ip = comm.bcast(ip, root=0)
-    port = comm.bcast(port, root=0)
-    url = f'tcp://{ip}:{port}'
-
-    comm.Barrier()
-
-    dist.init_process_group(
-        init_method=url,
-        world_size=_WorkerInfo.WORLD_SIZE,
-        rank=_WorkerInfo.RANK,
-        **kwargs,
-    )
-
-
-def _init_process_group_auto(verbose=True, **kwargs):
-    """
-    Tries to initialize torch.distributed in the following order:
-    1. If the MASTER_PORT environment variable is set, use environment variable initialization
-    2. If srun (slurm) was used to launch this program, use slurms environment variables
-    2. If MPI is available, use MPI to exchange ip addresses (see init_process_group_MPI)
-    3. Otherwise, a dummy process group with a single process is used (no distributed training)
-    """
-
-    if has_environment():
-        _init_process_group_env(**kwargs)
-    elif has_slurm():
-        _init_process_group_slurm(**kwargs)
-    elif has_mpi():
-        _init_process_group_MPI(**kwargs)
-    else:
-        _init_process_group_dummy()
-
-
-def init(kind='auto'):
-    """
-    Initializes the torch.distributed framework.
-
-    For most use cases, kind='auto' (the default) should be sufficient.
-
-    - If kind is 'env', the "env://" initialization method is used. See torch.distributed.init_process_group.
-    - If kind is 'slurm', SLURM environment variables are used to find the ip address of the root rank.
-    - If kind is 'mpi', MPI is used to exchange ip addresses.
-    - If kind is 'dummy', a dummy process group with a single process is used (no distributed training). This is useful for debugging and testing.
-
-
-    The 'auto' kind tries to initialize the process group in the following order:
-
-    1. If the MASTER_PORT environment variable is set, use environment variable initialization
-    2. If srun (slurm) was used to launch this program, use slurms environment variables
-    3. If MPI is available, use MPI to exchange ip addresses
-    4. Otherwise, a dummy process group with a single process is used (no distributed training)
-
-    Args:
-        kind (str): The kind of initialization to use. Can be one of 'auto', 'dummy', 'slurm', 'mpi', or 'env'.
-    """
-
-    if kind not in ['auto', 'dummy', 'slurm', 'mpi', 'env']:
-        raise ValueError(f"Invalid kind: {kind}. Must be one of 'auto', 'dummy', 'slurm', 'mpi', 'env'")
-
-    if kind == 'auto':
-        _init_process_group_auto(backend='cpu:gloo,cuda:nccl')
-    elif kind == 'dummy':
-        _init_process_group_dummy(backend='cpu:gloo,cuda:nccl')
-    elif kind == 'slurm':
-        _init_process_group_slurm(backend='cpu:gloo,cuda:nccl')
-    elif kind == 'mpi':
-        _init_process_group_MPI(backend='cpu:gloo,cuda:nccl')
-    elif kind == 'env':
-        _init_process_group_env(backend='cpu:gloo,cuda:nccl')
-
-    atexit.register(deinitialize_torch_distributed, fail_silently=True)
-
-
-def deinitialize_torch_distributed(fail_silently=False):
-    """
-    Deinitializes the torch distributed framework.
-    At the time of writing, `dist.destroy_process_group()` is not well documented.
-    Hence, this function.
-    """
-    if not dist.is_initialized() and fail_silently:
-        return
-
-    _WorkerInfo.INIT_METHOD = None
-    _WorkerInfo.RANK = None
-    _WorkerInfo.WORLD_SIZE = None
-    _WorkerInfo.LOCAL_RANK = None
-    _WorkerInfo.LOCAL_WORLD_SIZE = None
-    _WorkerInfo.NODE_ID = None
-    dist.destroy_process_group()
 
 
 def seed(seed: int | None = None, group: dist.ProcessGroup = None) -> int:
