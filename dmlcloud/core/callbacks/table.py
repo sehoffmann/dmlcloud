@@ -14,16 +14,31 @@ if TYPE_CHECKING:
 class TableCallback(Callback):
     """
     A callback that updates a table with the latest metrics from a stage.
+
+    By default the table prints one row per epoch.  Call
+    ``enable_step_updates()`` to switch to intra-epoch mode: the current row
+    is kept alive and refreshed on every ``post_step``, so long-running
+    single-epoch stages (e.g. prediction) show live progress.
     """
 
     def __init__(self):
         self._table = None
         self.tracked_metrics = {}
         self.formatters = {}
+        self._step_updates = False
+
+    def enable_step_updates(self):
+        """Opt into intra-epoch live progress updates.
+
+        Must be called before the first ``add_column`` / ``get_table`` call
+        so the ``ProgressTable`` is created with ``interactive=1``.
+        """
+        self._step_updates = True
 
     def get_table(self, stage: 'Stage'):
         if self._table is None:
-            self._table = ProgressTable(file=sys.stdout if is_root() else DevNullIO(), interactive=0)
+            interactive = 1 if self._step_updates else 0
+            self._table = ProgressTable(file=sys.stdout if is_root() else DevNullIO(), interactive=interactive)
             self.track_metric(stage, 'Epoch', width=5)
             self.track_metric(stage, 'Took', 'misc/epoch_time', formatter=TimedeltaFormatter(), width=7)
             if stage._run_epoch_overridden:
@@ -99,3 +114,31 @@ class TableCallback(Callback):
                 pass  # don't update -> empty cell
 
         table.next_row()
+
+    def post_step(self, stage: 'Stage'):
+        if not self._step_updates:
+            return
+
+        # Compute only the metrics that are actually displayed in the table.
+        # Avoids paying the cost of reduce() on untracked metrics (e.g. eval
+        # metrics backed by torchmetrics) that are not shown here.
+        # This runs after ReduceMetricsCallback (priority TABLE > METRIC_REDUCTION),
+        # so stage.metrics already contains the values logged this step.
+        table = self.get_table(stage)
+
+        for column_name, metric_name in self.tracked_metrics.items():
+            if column_name not in table.column_names:
+                continue
+            if metric_name not in stage.metrics.metrics:
+                continue
+            metric = stage.metrics.metrics[metric_name]
+            if not metric.update_called:
+                continue
+
+            value = metric.compute()
+            if hasattr(value, 'item'):
+                value = value.item()
+            formatter = self.formatters[column_name]
+            if formatter is not None:
+                value = formatter(value)
+            table.update(column_name, value)

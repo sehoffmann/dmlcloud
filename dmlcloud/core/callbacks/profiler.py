@@ -2,6 +2,8 @@ from typing import TYPE_CHECKING
 
 from torch.profiler import profile, ProfilerActivity
 
+from dmlcloud.core.distributed import is_root
+
 from .common import Callback
 
 
@@ -43,6 +45,9 @@ class ProfilerCallback(Callback):
 
         self.profiler.__exit__(None, None, None)
         self._capturing = False
+
+        if is_root():
+            print(self.profiler.key_averages().table(sort_by="self_cuda_time_total"))
 
         if stage.run_dir:
             outfile = str(stage.run_dir / f'{stage.name}_epoch{stage.current_epoch - 1}_trace.json')

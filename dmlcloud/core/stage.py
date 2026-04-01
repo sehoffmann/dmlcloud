@@ -232,6 +232,18 @@ class Stage:
             self, name, metric=metric, formatter=formatter, width=width, color=color, alignment=alignment
         )
 
+    def enable_step_updates(self):
+        """Enable live intra-epoch progress updates in the table.
+
+        When enabled the table row is refreshed on every ``finish_step()``
+        call instead of only at epoch boundaries.  Useful for long single-epoch
+        stages such as prediction.
+
+        Must be called before the first ``add_column()`` so the underlying
+        ``ProgressTable`` is created in interactive mode.
+        """
+        self._table_callback.enable_step_updates()
+
     def enable_profiler(self, epochs: list | None = [0], schedule=None):
         """
         Enables the profiler for this stage.
