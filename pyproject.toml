@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "dmlcloud"
 description = "Painless distributed training with torch"
-version = "0.4"
+version = "0.5.1"
 authors = [
     { name = "Sebastian Hoffmann", email = "shoffmann@bgc-jena.mpg.de"},
 ]
