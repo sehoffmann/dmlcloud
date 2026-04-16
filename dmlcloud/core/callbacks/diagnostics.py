@@ -19,7 +19,13 @@ from .common import Callback
 class DiagnosticsCallback(Callback):
     """
     A callback that logs diagnostics information at the beginning of training.
+
+    Args:
+        verbose_config: If True, print full config. If False, print only key fields (default: False).
     """
+
+    def __init__(self, verbose_config: bool = False):
+        self.verbose_config = verbose_config
 
     def _experiment_header(
         self,
@@ -78,8 +84,26 @@ class DiagnosticsCallback(Callback):
 
         diagnostics = self._general_diagnostics()
 
-        diagnostics += '\n* CONFIG:\n'
-        diagnostics += '\n'.join(f'    {line}' for line in OmegaConf.to_yaml(pipe.config, resolve=True).splitlines())
+        if self.verbose_config:
+            # Print full config
+            diagnostics += '\n* CONFIG:\n'
+            diagnostics += '\n'.join(f'    {line}' for line in OmegaConf.to_yaml(pipe.config, resolve=True).splitlines())
+        else:
+            # Print only key config fields for brevity
+            diagnostics += '\n* CONFIG SUMMARY:\n'
+            key_fields = ['name', 'datamodules', 'batch_size', 'lr', 'base_lr', 'epochs', 'loss', 'compile', 'wandb_project']
+            for field in key_fields:
+                if field in pipe.config:
+                    value = pipe.config[field]
+                    # Truncate long values
+                    value_str = str(value)
+                    if len(value_str) > 100:
+                        value_str = value_str[:97] + '...'
+                    diagnostics += f'    - {field}: {value_str}\n'
+
+            # Show model modules count
+            if 'model' in pipe.config and 'modules' in pipe.config.model:
+                diagnostics += f'    - model.modules: {len(pipe.config.model.modules)} modules\n'
 
         dml_logging.info(diagnostics)
 

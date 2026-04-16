@@ -174,7 +174,9 @@ class Pipeline:
         self.stages = []
         self.callbacks = CallbackList()
 
-        self.add_callback(DiagnosticsCallback(), CbPriority.DIAGNOSTICS)
+        # Check config for verbose_config setting (default: False for concise output)
+        verbose_config = self.config.get('verbose_config', False)
+        self.add_callback(DiagnosticsCallback(verbose_config=verbose_config), CbPriority.DIAGNOSTICS)
         self.add_callback(GitDiffCallback(), CbPriority.GIT)
         self.add_callback(_ForwardCallback(), CbPriority.OBJECT_METHODS)  # methods have priority 0
         if self.device.type == 'cuda':
