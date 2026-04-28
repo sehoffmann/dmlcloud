@@ -39,6 +39,25 @@ class TableCallback(Callback):
         if self._table is None:
             interactive = 1 if self._step_updates else 0
             self._table = ProgressTable(file=sys.stdout if is_root() else DevNullIO(), interactive=interactive)
+            # Override the default cell formatter so None / NaN cells render
+            # as the empty string instead of raising
+            # ``TypeError: unsupported format string passed to NoneType.__format__``.
+            # This regularly happens when the user logs a metric on some
+            # epochs but not all (e.g. ``val_freq > 1``): cells skipped that
+            # epoch stay as None and crash the default ``fmt``. Crashing
+            # inside ``table.close()`` at ``post_stage`` aborts the whole
+            # stage after the training has already completed.
+            _default_fmt = self._table.custom_cell_format
+
+            def _none_safe_fmt(x):
+                if x is None:
+                    return ""
+                try:
+                    return _default_fmt(x)
+                except (TypeError, ValueError):
+                    return str(x)
+
+            self._table.custom_cell_format = _none_safe_fmt
             self.track_metric(stage, 'Epoch', width=5)
             self.track_metric(stage, 'Took', 'misc/epoch_time', formatter=TimedeltaFormatter(), width=7)
             if stage._run_epoch_overridden:

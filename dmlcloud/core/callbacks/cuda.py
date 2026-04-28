@@ -70,58 +70,69 @@ class CudaCallback(Callback):
             self._save(pipe.run_dir / 'diagnostics' / 'cuda_devices.json', all_infos)
 
     def post_step(self, stage):
-        if is_root():
-            stats = torch.cuda.memory_stats(stage.device)
-            stage.log(
-                'misc/cuda/allocated_bytes_peak',
-                stats['allocated_bytes.all.peak'],
-                prefixed=False,
-                synchronize=False,
-                reduction='max',
-            )
-            stage.log(
-                'misc/cuda/reserved_bytes_peak',
-                stats['reserved_bytes.all.peak'],
-                prefixed=False,
-                synchronize=False,
-                reduction='max',
-            )
-            stage.log(
-                'misc/cuda/active_bytes_peak',
-                stats['active_bytes.all.peak'],
-                prefixed=False,
-                synchronize=False,
-                reduction='max',
-            )
-            stage.log(
-                'misc/cuda/requested_bytes_peak',
-                stats['requested_bytes.all.peak'],
-                prefixed=False,
-                synchronize=False,
-                reduction='max',
-            )
-            stage.log(
-                'misc/cuda/num_alloc_retries',
-                stats['num_alloc_retries'],
-                prefixed=False,
-                synchronize=False,
-                reduction='max',
-            )
-            stage.log(
-                'misc/cuda/num_device_alloc',
-                stats['num_device_alloc'],
-                prefixed=False,
-                synchronize=False,
-                reduction='max',
-            )
-            stage.log(
-                'misc/cuda/num_device_free',
-                stats['num_device_free'],
-                prefixed=False,
-                synchronize=False,
-                reduction='max',
-            )
-            torch.cuda.reset_peak_memory_stats(stage.device)
+        # ``torch.cuda.memory_stats`` queries the CUDA driver and returns an
+        # OrderedDict of ~50 entries; called every step it adds measurable
+        # per-step overhead. The recorded metric is ``peak`` memory which
+        # only changes when allocator high-watermark moves, so polling at
+        # 25-step granularity captures the same peak with 1/25th the cost.
+        # ``cuda_log_every_n_steps`` (default 25) on stage.config overrides.
+        period = int(getattr(stage.config, 'get', lambda *_: None)('cuda_log_every_n_steps', 25) or 1) \
+            if hasattr(stage, 'config') else 25
+        if not is_root():
+            return
+        if (stage.global_step % period) != 0:
+            return
+        stats = torch.cuda.memory_stats(stage.device)
+        stage.log(
+            'misc/cuda/allocated_bytes_peak',
+            stats['allocated_bytes.all.peak'],
+            prefixed=False,
+            synchronize=False,
+            reduction='max',
+        )
+        stage.log(
+            'misc/cuda/reserved_bytes_peak',
+            stats['reserved_bytes.all.peak'],
+            prefixed=False,
+            synchronize=False,
+            reduction='max',
+        )
+        stage.log(
+            'misc/cuda/active_bytes_peak',
+            stats['active_bytes.all.peak'],
+            prefixed=False,
+            synchronize=False,
+            reduction='max',
+        )
+        stage.log(
+            'misc/cuda/requested_bytes_peak',
+            stats['requested_bytes.all.peak'],
+            prefixed=False,
+            synchronize=False,
+            reduction='max',
+        )
+        stage.log(
+            'misc/cuda/num_alloc_retries',
+            stats['num_alloc_retries'],
+            prefixed=False,
+            synchronize=False,
+            reduction='max',
+        )
+        stage.log(
+            'misc/cuda/num_device_alloc',
+            stats['num_device_alloc'],
+            prefixed=False,
+            synchronize=False,
+            reduction='max',
+        )
+        stage.log(
+            'misc/cuda/num_device_free',
+            stats['num_device_free'],
+            prefixed=False,
+            synchronize=False,
+            reduction='max',
+        )
+        torch.cuda.reset_peak_memory_stats(stage.device)
 
     def _save(self, path, all_infos):
         with open(path, 'w') as f:

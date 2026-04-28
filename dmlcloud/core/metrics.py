@@ -153,8 +153,15 @@ class Tracker(torch.nn.Module):
 
         if not torch.is_tensor(value):
             value = torch.tensor(value)
-        value = value.cpu()
+        # Keep the metric tensor on the value's device. The previous code did
+        # ``value = value.cpu()`` here, which forces a synchronous GPU->CPU
+        # transfer on every per-step ``log`` call and serialises the
+        # accelerator pipeline (300+ ms/step in the JANE training loop).
+        # Pushing the metric onto the GPU lets ``MeanMetric.update`` stay
+        # on-device; the eventual ``compute()`` at epoch boundary does the
+        # single sync we actually need.
         dtype = value.dtype
+        device = value.device
 
         if name not in self.metrics:
             if reduction == 'mean':
@@ -168,8 +175,16 @@ class Tracker(torch.nn.Module):
                 metric = torchmetrics.MaxMetric(**kwargs)
             elif reduction == 'cat':
                 metric = torchmetrics.CatMetric(**kwargs)
-            metric = metric.cpu().set_dtype(dtype)
+            metric = metric.to(device).set_dtype(dtype)
             self.add_metric(name, metric)
+        else:
+            existing = self.metrics[name]
+            if existing.device != device:
+                # First-time co-location: usually no-op after the very first
+                # update because every subsequent ``log`` arrives on the same
+                # device. Keeps the contract that the user can call ``log``
+                # with mixed-device values without the Tracker exploding.
+                self.metrics[name] = existing.to(device)
 
         self.metrics[name].update(value)
 
